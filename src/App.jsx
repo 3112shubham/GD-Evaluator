@@ -1,3 +1,4 @@
+// src/App.jsx
 import { useState, useEffect } from 'react';
 import { auth } from './firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
@@ -63,6 +64,7 @@ export default function App() {
           <Route path="/new-gd" element={user ? <NewGD /> : <Navigate to="/login" />} />
           <Route path="/gd/:gdId" element={user ? <GDView /> : <Navigate to="/login" />} />
           <Route path="/evaluations" element={user ? <Evaluations /> : <Navigate to="/login" />} />
+          <Route path="*" element={<Navigate to={user ? "/" : "/login"} />} />
         </Routes>
       </main>
     </Router>

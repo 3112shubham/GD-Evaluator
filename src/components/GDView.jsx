@@ -1,8 +1,65 @@
-import { useState, useEffect } from 'react';
+// src/components/GDView.jsx
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { FiSave, FiCheckCircle } from 'react-icons/fi';
+
+const categories = [
+  { 
+    id: 'opening', 
+    name: 'Opening & Facts', 
+    max: 20,
+    fields: [
+      { name: 'initiation', label: 'Topic Initiation', max: 5 },
+      { name: 'clarity', label: 'Opening Clarity', max: 5 },
+      { name: 'relevance', label: 'Relevance of Content', max: 5 },
+      { name: 'knowledge', label: 'Domain Knowledge', max: 5 }
+    ]
+  },
+  { 
+    id: 'speaking', 
+    name: 'Speaking & Delivery', 
+    max: 25,
+    fields: [
+      { name: 'vocabulary', label: 'Vocabulary & Fluency', max: 5 },
+      { name: 'flow', label: 'Logical Flow', max: 5 },
+      { name: 'confidence', label: 'Confidence', max: 5 },
+      { name: 'acknowledgment', label: 'Acknowledging Others', max: 5 },
+      { name: 'questioning', label: 'Asking Questions', max: 5 }
+    ]
+  },
+  { 
+    id: 'teamwork', 
+    name: 'Teamwork', 
+    max: 20,
+    fields: [
+      { name: 'participation', label: 'Time Sharing', max: 5 },
+      { name: 'behavior', label: 'Collaborative Behavior', max: 5 },
+      { name: 'perspectives', label: 'Multiple Perspectives', max: 5 },
+      { name: 'awareness', label: 'Awareness of Issues', max: 5 }
+    ]
+  },
+  { 
+    id: 'engagement', 
+    name: 'Engagement', 
+    max: 10,
+    fields: [
+      { name: 'bodyLanguage', label: 'Body Language', max: 5 },
+      { name: 'pressureHandling', label: 'Handling Pressure', max: 5 }
+    ]
+  },
+  { 
+    id: 'closing', 
+    name: 'Closing', 
+    max: 20,
+    fields: [
+      { name: 'conclusion', label: 'Clarity of Conclusion', max: 7 },
+      { name: 'summary', label: 'Summarizing Points', max: 7 },
+      { name: 'finalConfidence', label: 'Confidence While Closing', max: 6 }
+    ]
+  }
+];
 
 export default function GDView() {
   const { gdId } = useParams();
@@ -18,50 +75,68 @@ export default function GDView() {
       const docRef = doc(db, 'gds', gdId);
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
-        setGd(docSnap.data());
-        setActiveStudent(docSnap.data().evaluations[0]);
+        const gdData = docSnap.data();
+        setGd(gdData);
+        setActiveStudent(gdData.evaluations?.[0] || null);
+        setLoading(false);
+      } else {
         setLoading(false);
       }
     };
     fetchGD();
   }, [gdId]);
 
-  const handleScoreChange = (category, subCategory, value) => {
+  const handleScoreChange = useCallback((category, subCategory, value) => {
     if (!activeStudent || !gd) return;
     
-    const updatedEvaluations = gd.evaluations.map(evaluation => {
-      if (evaluation.studentId === activeStudent.studentId) {
-        return {
-          ...evaluation,
-          scores: {
-            ...evaluation.scores,
-            [category]: {
-              ...evaluation.scores[category],
-              [subCategory]: parseInt(value)
+    setGd(prevGd => {
+      const updatedEvaluations = prevGd.evaluations.map(evaluation => {
+        if (evaluation.studentId === activeStudent.studentId) {
+          return {
+            ...evaluation,
+            scores: {
+              ...evaluation.scores,
+              [category]: {
+                ...evaluation.scores[category],
+                [subCategory]: parseInt(value)
+              }
             }
-          }
-        };
-      }
-      return evaluation;
+          };
+        }
+        return evaluation;
+      });
+
+      return { ...prevGd, evaluations: updatedEvaluations };
     });
+    
+    setActiveStudent(prev => ({
+      ...prev,
+      scores: {
+        ...prev.scores,
+        [category]: {
+          ...prev.scores[category],
+          [subCategory]: parseInt(value)
+        }
+      }
+    }));
+  }, [activeStudent, gd]);
 
-    setGd({ ...gd, evaluations: updatedEvaluations });
-    setActiveStudent(updatedEvaluations.find(e => e.studentId === activeStudent.studentId));
-  };
-
-  const handleRemarksChange = (remarks) => {
+  const handleRemarksChange = useCallback((remarks) => {
     if (!activeStudent || !gd) return;
     
-    const updatedEvaluations = gd.evaluations.map(evaluation => {
-      if (evaluation.studentId === activeStudent.studentId) {
-        return { ...evaluation, remarks };
-      }
-      return evaluation;
-    });
+    setGd(prevGd => {
+      const updatedEvaluations = prevGd.evaluations.map(evaluation => {
+        if (evaluation.studentId === activeStudent.studentId) {
+          return { ...evaluation, remarks };
+        }
+        return evaluation;
+      });
 
-    setGd({ ...gd, evaluations: updatedEvaluations });
-    setActiveStudent(updatedEvaluations.find(e => e.studentId === activeStudent.studentId));
-  };
+      return { ...prevGd, evaluations: updatedEvaluations };
+    });
+    
+    setActiveStudent(prev => ({ ...prev, remarks }));
+  }, [activeStudent, gd]);
 
   const saveEvaluation = async () => {
     if (!gd || !activeStudent) return;
@@ -93,43 +168,32 @@ export default function GDView() {
     }
   };
 
-  const categories = [
-    { id: 'opening', name: 'Opening', max: 10, fields: ['initiation', 'clarity'] },
-    { id: 'facts', name: 'Facts', max: 20, fields: ['relevance', 'knowledge', 'examples', 'grammar'] },
-    { id: 'speaking', name: 'Speaking', max: 15, fields: ['vocabulary', 'flow', 'confidence'] },
-    { id: 'teamwork', name: 'Teamwork', max: 20, fields: ['questions', 'participation', 'behavior', 'perspectives'] },
-    { id: 'depth', name: 'Depth', max: 15, fields: ['awareness', 'bodyLanguage', 'counterviews'] },
-    { id: 'closing', name: 'Closing', max: 20, fields: ['conclusion', 'summary', 'confidence'] }
-  ];
+  const calculateCategoryTotal = useCallback((category) => {
+    return activeStudent?.scores?.[category] 
+      ? Object.values(activeStudent.scores[category]).reduce((a, b) => a + b, 0)
+      : 0;
+  }, [activeStudent]);
 
-  const calculateCategoryTotal = (category) => {
-    return Object.values(activeStudent?.scores[category] || {}).reduce((a, b) => a + b, 0);
-  };
-
-  const calculateTotalScore = () => {
+  const calculateTotalScore = useCallback(() => {
     return categories.reduce((total, category) => {
       return total + calculateCategoryTotal(category.id);
     }, 0);
-  };
+  }, [calculateCategoryTotal]);
 
   const ScoreSelector = ({ category, field }) => {
-    const maxScore = 
-      field === 'conclusion' || field === 'summary' ? 7 :
-      field === 'confidence' && category === 'closing' ? 6 : 5;
-    
-    const currentScore = activeStudent?.scores[category]?.[field] || 0;
+    const currentScore = activeStudent?.scores?.[category]?.[field.name] || 0;
 
     return (
       <div className="mb-4">
-        <h3 className="font-medium text-gray-700 capitalize mb-2">
-          {field.replace(/([A-Z])/g, ' $1')} (Max: {maxScore})
+        <h3 className="font-medium text-gray-700 mb-2">
+          {field.label} (Max: {field.max})
         </h3>
-        <div className="flex gap-2 flex-wrap">
-          {[...Array(maxScore + 1)].map((_, i) => (
+        <div className="flex flex-wrap gap-2">
+          {[...Array(field.max + 1)].map((_, i) => (
             <button
               key={i}
-              onClick={() => handleScoreChange(category, field, i)}
-              className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium ${
+              onClick={() => handleScoreChange(category, field.name, i)}
+              className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium transition ${
                 currentScore === i 
                   ? 'bg-blue-500 text-white' 
                   : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
@@ -212,35 +276,37 @@ export default function GDView() {
           </div>
 
           {/* Current Student Evaluation */}
-          <div className="mb-6">
-            <h2 className="text-lg font-semibold mb-3">
-              Evaluating: <span className="text-blue-600">{activeStudent.studentName}</span>
-            </h2>
-            
-            <div className="space-y-6">
-              {categories
-                .find(c => c.id === activeCategory)
-                ?.fields.map(field => (
-                  <ScoreSelector 
-                    key={field}
-                    category={activeCategory}
-                    field={field}
-                  />
-                ))
-              }
-            </div>
+          {activeStudent && (
+            <div className="mb-6">
+              <h2 className="text-lg font-semibold mb-3">
+                Evaluating: <span className="text-blue-600">{activeStudent.studentName}</span>
+              </h2>
+              
+              <div className="space-y-6">
+                {categories
+                  .find(c => c.id === activeCategory)
+                  ?.fields.map(field => (
+                    <ScoreSelector 
+                      key={field.name}
+                      category={activeCategory}
+                      field={field}
+                    />
+                  ))
+                }
+              </div>
 
-            <div className="mt-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Remarks</label>
-              <textarea
-                value={activeStudent.remarks}
-                onChange={(e) => handleRemarksChange(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                rows="3"
-                placeholder="Add your comments about this student's performance..."
-              />
+              <div className="mt-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Remarks</label>
+                <textarea
+                  value={activeStudent.remarks || ''}
+                  onChange={(e) => handleRemarksChange(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  rows="3"
+                  placeholder="Add your comments about this student's performance..."
+                />
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="flex justify-end gap-3">
             <button
