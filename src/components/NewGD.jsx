@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { collection, addDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, auth } from '../firebase';
 import { useNavigate } from 'react-router-dom';
 
 export default function NewGD() {
@@ -30,6 +30,8 @@ export default function NewGD() {
       topic,
       batch,
       students,
+      trainerId: auth.currentUser.uid,
+      trainerEmail: auth.currentUser.email,
       evaluations: students.map(student => ({
         studentId: `${student.name}-${Date.now()}`,
         studentName: student.name,
@@ -67,7 +69,7 @@ export default function NewGD() {
             type="text"
             value={topic}
             onChange={(e) => setTopic(e.target.value)}
-            className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border rounded-lg"
             placeholder="Enter GD topic"
           />
         </div>
@@ -77,7 +79,7 @@ export default function NewGD() {
           <select
             value={batch}
             onChange={(e) => setBatch(e.target.value)}
-            className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border rounded-lg"
           >
             <option value="">Select Batch</option>
             <option value="Batch 1">Batch 1</option>
@@ -93,13 +95,13 @@ export default function NewGD() {
               type="text"
               value={newStudent.name}
               onChange={(e) => setNewStudent({...newStudent, name: e.target.value})}
-              className="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-1 px-3 py-2 border rounded-lg"
               placeholder="Student Name"
             />
             <select
               value={newStudent.batch}
               onChange={(e) => setNewStudent({...newStudent, batch: e.target.value})}
-              className="px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-3 py-2 border rounded-lg"
             >
               <option value="">Select Batch</option>
               <option value="Batch 1">Batch 1</option>
@@ -108,7 +110,7 @@ export default function NewGD() {
             </select>
             <button
               onClick={addStudent}
-              className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition"
+              className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
             >
               Add
             </button>
@@ -148,7 +150,7 @@ export default function NewGD() {
         <button
           onClick={startGD}
           disabled={!topic || students.length === 0}
-          className={`w-full py-3 rounded-lg text-white font-medium ${!topic || students.length === 0 ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-500 hover:bg-green-600'}`}
+          className={`w-full py-3 rounded-lg text-white font-medium ${!topic || students.length === 0 ? 'bg-gray-400' : 'bg-green-500 hover:bg-green-600'}`}
         >
           Start GD Session
         </button>

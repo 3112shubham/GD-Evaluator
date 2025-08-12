@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, auth } from '../firebase';
 
 export default function Evaluations() {
   const [evaluations, setEvaluations] = useState([]);
@@ -11,7 +11,13 @@ export default function Evaluations() {
   });
 
   useEffect(() => {
-    let q = query(collection(db, 'gds'), where('completed', '==', true));
+    if (!auth.currentUser) return;
+    
+    let q = query(
+      collection(db, 'gds'), 
+      where('completed', '==', true),
+      where('trainerId', '==', auth.currentUser.uid)
+    );
     
     if (filter.batch) {
       q = query(q, where('batch', '==', filter.batch));
@@ -23,12 +29,13 @@ export default function Evaluations() {
     });
 
     return unsubscribe;
-  }, [filter.batch]);
+  }, [filter.batch, auth.currentUser]);
 
   const calculateTotalScore = (evaluation) => {
     const scores = evaluation.scores;
     return (
       scores.opening.initiation +
+      scores.opening.clarity +
       scores.facts.relevance +
       scores.facts.knowledge +
       scores.facts.examples +
@@ -52,7 +59,7 @@ export default function Evaluations() {
   return (
     <div className="min-h-screen bg-gray-100 p-4">
       <div className="max-w-6xl mx-auto">
-        <h1 className="text-2xl font-bold mb-6">GD Evaluations</h1>
+        <h1 className="text-2xl font-bold mb-6">Your GD Evaluations</h1>
         
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <h2 className="text-xl font-semibold mb-4">Filters</h2>
@@ -123,7 +130,7 @@ export default function Evaluations() {
                         <tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                           <td className="px-4 py-2">{evaluation.studentName}</td>
                           <td className="px-4 py-2 text-center">{calculateTotalScore(evaluation)}</td>
-                          <td className="px-4 py-2 text-sm text-gray-600 max-w-xs truncate">{eval.remarks}</td>
+                          <td className="px-4 py-2 text-sm text-gray-600 max-w-xs truncate">{evaluation.remarks}</td>
                         </tr>
                       ))}
                     </tbody>
