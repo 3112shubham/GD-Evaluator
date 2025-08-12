@@ -8,58 +8,60 @@ import { FiSave, FiCheckCircle } from 'react-icons/fi';
 const categories = [
   { 
     id: 'opening', 
-    name: 'Opening & Facts', 
+    name: 'Opening, Facts & Domain Knowledge', 
     max: 20,
     fields: [
-      { name: 'initiation', label: 'Topic Initiation', max: 5 },
-      { name: 'clarity', label: 'Opening Clarity', max: 5 },
-      { name: 'relevance', label: 'Relevance of Content', max: 5 },
-      { name: 'knowledge', label: 'Domain Knowledge', max: 5 }
+      { name: 'topicInitiation', label: 'Topic Initiation & Opening Clarity', max: 5 },
+      { name: 'contentRelevance', label: 'Relevance of Content', max: 5 },
+      { name: 'domainKnowledge', label: 'Domain/Industry Knowledge', max: 5 },
+      { name: 'useOfFacts', label: 'Use of Facts, Data, Examples', max: 5 }
     ]
   },
   { 
     id: 'speaking', 
-    name: 'Speaking & Delivery', 
-    max: 25,
+    name: 'Speaking, Language & Delivery', 
+    max: 20,
     fields: [
+      { name: 'grammar', label: 'Sentence Formation & Grammar', max: 5 },
       { name: 'vocabulary', label: 'Vocabulary & Fluency', max: 5 },
-      { name: 'flow', label: 'Logical Flow', max: 5 },
-      { name: 'confidence', label: 'Confidence', max: 5 },
-      { name: 'acknowledgment', label: 'Acknowledging Others', max: 5 },
-      { name: 'questioning', label: 'Asking Questions', max: 5 }
+      { name: 'logicalFlow', label: 'Logical Flow & Coherence', max: 5 },
+      { name: 'confidenceDelivery', label: 'Confidence in Delivery', max: 5 }
     ]
   },
   { 
     id: 'teamwork', 
-    name: 'Teamwork', 
+    name: 'Teamwork, Listening & Question Handling', 
     max: 20,
     fields: [
-      { name: 'participation', label: 'Time Sharing', max: 5 },
-      { name: 'behavior', label: 'Collaborative Behavior', max: 5 },
-      { name: 'perspectives', label: 'Multiple Perspectives', max: 5 },
-      { name: 'awareness', label: 'Awareness of Issues', max: 5 }
+      { name: 'acknowledging', label: 'Acknowledging Others’ Points', max: 5 },
+      { name: 'questions', label: 'Asking & Answering Questions', max: 5 },
+      { name: 'timeSharing', label: 'Time Sharing & Balanced Participation', max: 5 },
+      { name: 'collaboration', label: 'Respectful & Collaborative Behaviour', max: 5 }
     ]
   },
   { 
     id: 'engagement', 
-    name: 'Engagement', 
-    max: 10,
+    name: 'Depth, Interpretation & Engagement', 
+    max: 20,
     fields: [
-      { name: 'bodyLanguage', label: 'Body Language', max: 5 },
-      { name: 'pressureHandling', label: 'Handling Pressure', max: 5 }
+      { name: 'multiplePerspectives', label: 'Understanding Multiple Perspectives', max: 5 },
+      { name: 'awarenessIssues', label: 'Awareness of Underlying Issues', max: 5 },
+      { name: 'bodyLanguage', label: 'Body Language & Non-Verbal Cues', max: 5 },
+      { name: 'handlingPressure', label: 'Handling Pressure or Counterviews', max: 5 }
     ]
   },
   { 
     id: 'closing', 
-    name: 'Closing', 
+    name: 'Closing & Summarizing', 
     max: 20,
     fields: [
-      { name: 'conclusion', label: 'Clarity of Conclusion', max: 7 },
-      { name: 'summary', label: 'Summarizing Points', max: 7 },
-      { name: 'finalConfidence', label: 'Confidence While Closing', max: 6 }
+      { name: 'conclusionClarity', label: 'Clarity of Conclusion', max: 7 },
+      { name: 'summaryPoints', label: 'Summarizing Key Points', max: 7 },
+      { name: 'closingConfidence', label: 'Confidence While Closing', max: 6 }
     ]
   }
 ];
+
 
 export default function GDView() {
   const { gdId } = useParams();

@@ -18,7 +18,7 @@ const calculateTotalScore = (evaluation) => {
 };
 
 const getCategoryMax = (categoryId) => {
-  const maxValues = { opening: 20, speaking: 25, teamwork: 20, engagement: 10, closing: 20 };
+  const maxValues = { opening: 20, speaking: 20, teamwork: 20, engagement: 20, closing: 20 };
   return maxValues[categoryId] || 0;
 };
 
