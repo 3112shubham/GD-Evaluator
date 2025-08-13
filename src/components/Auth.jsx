@@ -4,9 +4,9 @@ import {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword 
 } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, getDocs, collection, where, query } from 'firebase/firestore';
 import { auth, db } from '../firebase';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { FiLogIn, FiUserPlus } from 'react-icons/fi';
 
 export default function Auth() {
@@ -16,23 +16,45 @@ export default function Auth() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [name, setName] = useState('');
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleAuth = async (e) => {
     e.preventDefault();
     try {
       if (isSignUp) {
+        // Check if email ends with allowed domain
+        if (!email.endsWith('@yourdomain.com')) {
+          throw new Error('Only authorized email domains can register');
+        }
+
+        // Check if user is in trainers collection
+        const trainersSnapshot = await getDocs(
+          query(collection(db, 'trainers'), where('email', '==', email))
+        );
+        
+        if (trainersSnapshot.empty) {
+          throw new Error('You are not authorized to register as trainer');
+        }
+
+        const trainerData = trainersSnapshot.docs[0].data();
+        
         // Create user and store in Firestore
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         await setDoc(doc(db, "users", userCredential.user.uid), {
-          name,
+          name: trainerData.name,
           email,
           createdAt: new Date(),
-          role: "trainer"
+          role: "trainer",
+          campuses: trainerData.campuses || [],
+          batches: trainerData.batches || []
         });
       } else {
         await signInWithEmailAndPassword(auth, email, password);
       }
-      navigate('/');
+      
+      // Redirect to the original path or dashboard
+      const from = location.state?.from?.pathname || '/';
+      navigate(from, { replace: true });
     } catch (err) {
       setError(err.message);
     }

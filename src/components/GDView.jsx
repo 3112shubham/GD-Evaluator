@@ -1,9 +1,9 @@
-// src/components/GDView.jsx
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { db } from '../firebase';
-import { FiSave, FiCheckCircle } from 'react-icons/fi';
+import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { db, auth } from '../firebase';
+import { FiSave, FiCheckCircle, FiUser, FiAward, FiUsers, FiPlus, FiChevronDown, FiChevronUp } from 'react-icons/fi';
+import { onSnapshot } from 'firebase/firestore';
 
 const categories = [
   { 
@@ -33,7 +33,7 @@ const categories = [
     name: 'Teamwork, Listening & Question Handling', 
     max: 20,
     fields: [
-      { name: 'acknowledging', label: 'Acknowledging Others’ Points', max: 5 },
+      { name: 'acknowledging', label: 'Acknowledging Others Points', max: 5 },
       { name: 'questions', label: 'Asking & Answering Questions', max: 5 },
       { name: 'timeSharing', label: 'Time Sharing & Balanced Participation', max: 5 },
       { name: 'collaboration', label: 'Respectful & Collaborative Behaviour', max: 5 }
@@ -62,7 +62,6 @@ const categories = [
   }
 ];
 
-
 export default function GDView() {
   const { gdId } = useParams();
   const navigate = useNavigate();
@@ -71,28 +70,116 @@ export default function GDView() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeCategory, setActiveCategory] = useState('opening');
+  const [availableStudents, setAvailableStudents] = useState([]);
+  const [students, setStudents] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [availableGDs, setAvailableGDs] = useState([]);
+  // const [showGDsDropdown, setShowGDsDropdown] = useState(false);
+useEffect(() => {
+  const unsubscribe = onSnapshot(doc(db, 'sessions', gdId), (doc) => {
+    if (doc.exists()) {
+      const gdData = doc.data();
+      setGd(gdData);
+      setStudents(gdData.students || []);
+      
+      // Use functional update to avoid dependency
+      setActiveStudent(prev => {
+        if (!prev || !gdData.evaluations) return prev;
+        
+        const updatedEvaluation = gdData.evaluations.find(e => e.studentId === prev.studentId);
+        if (!updatedEvaluation) return prev;
+        
+        return {
+          ...prev,
+          scores: updatedEvaluation.scores,
+          remarks: updatedEvaluation.remarks
+        };
+      });
+    }
+  });
 
+  return () => unsubscribe();
+}, [gdId]);  // Now only depends on gdId
   useEffect(() => {
     const fetchGD = async () => {
-      const docRef = doc(db, 'gds', gdId);
+      const docRef = doc(db, 'sessions', gdId);
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
         const gdData = docSnap.data();
         setGd(gdData);
-        setActiveStudent(gdData.evaluations?.[0] || null);
+        setStudents(gdData.students || []);
+        
+        if (gdData.students?.length > 0) {
+          const firstStudent = gdData.students[0];
+          setActiveStudent({
+            studentId: firstStudent.id,
+            studentName: firstStudent.name,
+            studentEmail: firstStudent.email,
+            chestNumber: firstStudent.chestNumber,
+            scores: gdData.evaluations?.find(e => e.studentId === firstStudent.id)?.scores || {},
+            remarks: gdData.evaluations?.find(e => e.studentId === firstStudent.id)?.remarks || ''
+          });
+        }
+        
+        if (gdData.specializationId) {
+          const batchesQuery = query(
+            collection(db, 'batches'),
+            where('specializationId', '==', gdData.specializationId)
+          );
+          const batchesSnapshot = await getDocs(batchesQuery);
+          
+          if (!batchesSnapshot.empty) {
+            const studentsPromises = batchesSnapshot.docs.map(async batchDoc => {
+              const studentsSnapshot = await getDocs(
+                collection(db, 'batches', batchDoc.id, 'students')
+              );
+              return studentsSnapshot.docs.map(studentDoc => ({
+                id: studentDoc.id,
+                ...studentDoc.data(),
+                batchId: batchDoc.id
+              }));
+            });
+            
+            const studentsArrays = await Promise.all(studentsPromises);
+            setAvailableStudents(studentsArrays.flat());
+          }
+        }
+        
         setLoading(false);
       } else {
         setLoading(false);
       }
     };
+
+    const fetchActiveGDs = async () => {
+      if (!auth.currentUser) return;
+      
+      const q = query(
+        collection(db, 'sessions'),
+        where('type', '==', 'gd'),
+        where('completed', '==', false),
+        where('isActive', '==', true),
+        where('trainerId', '==', auth.currentUser.uid)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const gds = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      setAvailableGDs(gds);
+    };
+
     fetchGD();
+    fetchActiveGDs();
   }, [gdId]);
 
   const handleScoreChange = useCallback((category, subCategory, value) => {
     if (!activeStudent || !gd) return;
     
     setGd(prevGd => {
-      const updatedEvaluations = prevGd.evaluations.map(evaluation => {
+      const updatedEvaluations = prevGd.evaluations?.map(evaluation => {
         if (evaluation.studentId === activeStudent.studentId) {
           return {
             ...evaluation,
@@ -106,7 +193,29 @@ export default function GDView() {
           };
         }
         return evaluation;
-      });
+      }) || [];
+
+      if (!updatedEvaluations.some(e => e.studentId === activeStudent.studentId)) {
+        updatedEvaluations.push({
+          studentId: activeStudent.studentId,
+          studentName: activeStudent.studentName,
+          studentEmail: activeStudent.studentEmail,
+          chestNumber: activeStudent.chestNumber,
+          scores: {
+            opening: { topicInitiation: 0, contentRelevance: 0, domainKnowledge: 0, useOfFacts: 0 },
+            speaking: { grammar: 0, vocabulary: 0, logicalFlow: 0, confidenceDelivery: 0 },
+            teamwork: { acknowledging: 0, questions: 0, timeSharing: 0, collaboration: 0 },
+            engagement: { multiplePerspectives: 0, awarenessIssues: 0, bodyLanguage: 0, handlingPressure: 0 },
+            closing: { conclusionClarity: 0, summaryPoints: 0, closingConfidence: 0 },
+            ...activeStudent.scores,
+            [category]: {
+              ...(activeStudent.scores?.[category] || {}),
+              [subCategory]: parseInt(value)
+            }
+          },
+          remarks: activeStudent.remarks || ''
+        });
+      }
 
       return { ...prevGd, evaluations: updatedEvaluations };
     });
@@ -127,12 +236,29 @@ export default function GDView() {
     if (!activeStudent || !gd) return;
     
     setGd(prevGd => {
-      const updatedEvaluations = prevGd.evaluations.map(evaluation => {
+      const updatedEvaluations = prevGd.evaluations?.map(evaluation => {
         if (evaluation.studentId === activeStudent.studentId) {
           return { ...evaluation, remarks };
         }
         return evaluation;
-      });
+      }) || [];
+
+      if (!updatedEvaluations.some(e => e.studentId === activeStudent.studentId)) {
+        updatedEvaluations.push({
+          studentId: activeStudent.studentId,
+          studentName: activeStudent.studentName,
+          studentEmail: activeStudent.studentEmail,
+          chestNumber: activeStudent.chestNumber,
+          scores: activeStudent.scores || {
+            opening: { topicInitiation: 0, contentRelevance: 0, domainKnowledge: 0, useOfFacts: 0 },
+            speaking: { grammar: 0, vocabulary: 0, logicalFlow: 0, confidenceDelivery: 0 },
+            teamwork: { acknowledging: 0, questions: 0, timeSharing: 0, collaboration: 0 },
+            engagement: { multiplePerspectives: 0, awarenessIssues: 0, bodyLanguage: 0, handlingPressure: 0 },
+            closing: { conclusionClarity: 0, summaryPoints: 0, closingConfidence: 0 }
+          },
+          remarks
+        });
+      }
 
       return { ...prevGd, evaluations: updatedEvaluations };
     });
@@ -141,11 +267,11 @@ export default function GDView() {
   }, [activeStudent, gd]);
 
   const saveEvaluation = async () => {
-    if (!gd || !activeStudent) return;
+    if (!gd) return;
     setSaving(true);
     try {
-      await updateDoc(doc(db, 'gds', gdId), {
-        evaluations: gd.evaluations
+      await updateDoc(doc(db, 'sessions', gdId), {
+        evaluations: gd.evaluations || []
       });
       setSaving(false);
     } catch (err) {
@@ -158,12 +284,14 @@ export default function GDView() {
     if (!gd) return;
     setSaving(true);
     try {
-      await updateDoc(doc(db, 'gds', gdId), {
-        evaluations: gd.evaluations,
+      await updateDoc(doc(db, 'sessions', gdId), {
+        evaluations: gd.evaluations || [],
         completed: true,
-        completedAt: new Date()
+        completedAt: new Date(),
+        isActive: false,
+        type: 'gd'
       });
-      navigate('/');
+      navigate('/dashboard', { replace: true });
     } catch (err) {
       console.error("Error completing GD: ", err);
       setSaving(false);
@@ -181,6 +309,51 @@ export default function GDView() {
       return total + calculateCategoryTotal(category.id);
     }, 0);
   }, [calculateCategoryTotal]);
+
+  const addStudent = (student) => {
+    if (!students.some(s => s.id === student.id)) {
+      const chestNumber = students.length > 0 
+        ? Math.max(...students.map(s => s.chestNumber)) + 1 
+        : 1;
+      const newStudent = { ...student, chestNumber };
+      
+      setStudents([...students, newStudent]);
+      
+      setActiveStudent({
+        studentId: newStudent.id,
+        studentName: newStudent.name,
+        studentEmail: newStudent.email,
+        chestNumber: newStudent.chestNumber,
+        scores: {},
+        remarks: ''
+      });
+    }
+  };
+
+  const removeStudent = (studentId) => {
+    setStudents(students.filter(s => s.id !== studentId));
+    
+    if (activeStudent?.studentId === studentId) {
+      const remainingStudents = students.filter(s => s.id !== studentId);
+      if (remainingStudents.length > 0) {
+        const nextStudent = remainingStudents[0];
+        setActiveStudent({
+          studentId: nextStudent.id,
+          studentName: nextStudent.name,
+          studentEmail: nextStudent.email,
+          chestNumber: nextStudent.chestNumber,
+          scores: gd.evaluations?.find(e => e.studentId === nextStudent.id)?.scores || {},
+          remarks: gd.evaluations?.find(e => e.studentId === nextStudent.id)?.remarks || ''
+        });
+      } else {
+        setActiveStudent(null);
+      }
+    }
+  };
+
+  const switchGD = (newGdId) => {
+    navigate(`/gd/${newGdId}`);
+  };
 
   const ScoreSelector = ({ category, field }) => {
     const currentScore = activeStudent?.scores?.[category]?.[field.name] || 0;
@@ -229,103 +402,149 @@ export default function GDView() {
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-4xl mx-auto">
         <div className="bg-white rounded-xl shadow-sm p-6 mb-6 border border-gray-100">
-          <div className="mb-6">
-            <h1 className="text-2xl font-bold text-gray-800 mb-1">{gd.topic}</h1>
-            <p className="text-gray-600">Batch: {gd.batch}</p>
-            <div className="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-sm font-medium inline-block mt-2">
-              Total: {calculateTotalScore()}/100
+          {/* GD Selection Dropdown */}
+            <div className="mb-6">
+            <h1 className="text-2xl font-bold text-gray-800 mb-1">{gd.groupName}</h1>
+            <h2 className="text-lg text-gray-600 mb-3">{gd.topic}</h2>
+            
+            {availableGDs.length > 0 && (
+              <div className="mb-4">
+                <h2 className="text-lg font-semibold mb-2">Active GDs</h2>
+                <div className="flex flex-wrap gap-2">
+                  {availableGDs.map(gdItem => (
+                    <button
+                      key={gdItem.id}
+                      onClick={() => switchGD(gdItem.id)}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 ${
+                        gdItem.id === gdId 
+                          ? 'bg-blue-500 text-white' 
+                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      }`}
+                    >
+                      <span>{gdItem.groupName}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            <div className="flex flex-wrap gap-3 text-sm text-gray-600">
+              <div className="flex items-center gap-1">
+                <FiUsers className="text-gray-500" /> {students.length} Participants
+              </div>
+              <div className="flex items-center gap-1">
+                <FiAward className="text-gray-500" /> Highest: {Math.max(...(
+                  gd.evaluations?.map(e => 
+                    Object.values(e.scores).flatMap(c => Object.values(c)).reduce((a, b) => a + b, 0)
+                  ) || []
+                ))}/100
+              </div>
             </div>
+            {activeStudent && (
+              <div className="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-sm font-medium inline-block mt-2">
+                Total: {calculateTotalScore()}/100
+              </div>
+            )}
           </div>
           
           {/* Student Selection */}
           <div className="mb-6">
             <h2 className="text-lg font-semibold mb-3">Students</h2>
             <div className="flex flex-wrap gap-2">
-              {gd.evaluations.map((evaluation) => (
+              {students.map((student) => (
                 <button
-                  key={evaluation.studentId}
-                  onClick={() => setActiveStudent(evaluation)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium ${
-                    activeStudent?.studentId === evaluation.studentId 
+                  key={student.id}
+                  onClick={() => setActiveStudent({
+                    studentId: student.id,
+                    studentName: student.name,
+                    studentEmail: student.email,
+                    chestNumber: student.chestNumber,
+                    scores: gd.evaluations?.find(e => e.studentId === student.id)?.scores || {},
+                    remarks: gd.evaluations?.find(e => e.studentId === student.id)?.remarks || ''
+                  })}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 ${
+                    activeStudent?.studentId === student.id 
                       ? 'bg-blue-500 text-white' 
                       : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                   }`}
                 >
-                  {evaluation.studentName}
+                  <span>#{student.chestNumber}</span>
+                  <span>{student.name}</span>
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Category Selection */}
-          <div className="mb-6">
-            <h2 className="text-lg font-semibold mb-3">Evaluation Criteria</h2>
-            <div className="flex flex-wrap gap-2">
-              {categories.map(category => (
-                <button
-                  key={category.id}
-                  onClick={() => setActiveCategory(category.id)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium ${
-                    activeCategory === category.id 
-                      ? 'bg-blue-500 text-white' 
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                  }`}
-                >
-                  {category.name} ({calculateCategoryTotal(category.id)}/{category.max})
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Current Student Evaluation */}
+          {/* Evaluation Section */}
           {activeStudent && (
-            <div className="mb-6">
-              <h2 className="text-lg font-semibold mb-3">
-                Evaluating: <span className="text-blue-600">{activeStudent.studentName}</span>
-              </h2>
-              
-              <div className="space-y-6">
-                {categories
-                  .find(c => c.id === activeCategory)
-                  ?.fields.map(field => (
-                    <ScoreSelector 
-                      key={field.name}
-                      category={activeCategory}
-                      field={field}
-                    />
-                  ))
-                }
+            <>
+              <div className="mb-6">
+                <h2 className="text-lg font-semibold mb-3">Evaluation Criteria</h2>
+                <div className="flex flex-wrap gap-2">
+                  {categories.map(category => (
+                    <button
+                      key={category.id}
+                      onClick={() => setActiveCategory(category.id)}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium ${
+                        activeCategory === category.id 
+                          ? 'bg-blue-500 text-white' 
+                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      }`}
+                    >
+                      {category.name} ({calculateCategoryTotal(category.id)}/{category.max})
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              <div className="mt-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Remarks</label>
-                <textarea
-                  value={activeStudent.remarks || ''}
-                  onChange={(e) => handleRemarksChange(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  rows="3"
-                  placeholder="Add your comments about this student's performance..."
-                />
+              <div className="mb-6">
+                <h2 className="text-lg font-semibold mb-3">
+                  Evaluating: <span className="text-blue-600">#{activeStudent.chestNumber} {activeStudent.studentName}</span>
+                </h2>
+                
+                <div className="space-y-6">
+                  {categories
+                    .find(c => c.id === activeCategory)
+                    ?.fields.map(field => (
+                      <ScoreSelector 
+                        key={field.name}
+                        category={activeCategory}
+                        field={field}
+                      />
+                    ))
+                  }
+                </div>
+
+                <div className="mt-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Remarks</label>
+                  <textarea
+                    value={activeStudent.remarks || ''}
+                    onChange={(e) => handleRemarksChange(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    rows="3"
+                    placeholder="Add your comments about this student's performance..."
+                  />
+                </div>
               </div>
-            </div>
+
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={saveEvaluation}
+                  disabled={saving}
+                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition disabled:opacity-50"
+                >
+                  <FiSave /> {saving ? 'Saving...' : 'Save'}
+                </button>
+                <button
+                  onClick={completeGD}
+                  disabled={saving}
+                  className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition disabled:opacity-50"
+                >
+                  <FiCheckCircle /> Complete GD
+                </button>
+              </div>
+            </>
           )}
-
-          <div className="flex justify-end gap-3">
-            <button
-              onClick={saveEvaluation}
-              disabled={saving}
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition disabled:opacity-50"
-            >
-              <FiSave /> {saving ? 'Saving...' : 'Save'}
-            </button>
-            <button
-              onClick={completeGD}
-              disabled={saving}
-              className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition disabled:opacity-50"
-            >
-              <FiCheckCircle /> Complete GD
-            </button>
-          </div>
         </div>
       </div>
     </div>
