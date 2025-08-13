@@ -1,49 +1,27 @@
 // src/components/Evaluations.jsx
 import { useState, useEffect } from 'react';
-import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, orderBy, getDocs } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 
 const categories = [
-  {
-    id: 'introduction',
-    name: 'Introduction'
-  },
-  {
-    id: 'internship',
-    name: 'Internship/Experience'
-  },
-  {
-    id: 'bodyLanguage',
-    name: 'Body Language'
-  },
-  {
-    id: 'domainKnowledge',
-    name: 'Domain Knowledge'
-  },
-  {
-    id: 'starMethod',
-    name: 'STAR Method'
-  },
-  {
-    id: 'crispness',
-    name: 'Crispness of Answers'
-  },
-  {
-    id: 'situational',
-    name: 'Situational Handling'
-  },
-  {
-    id: 'jdAwareness',
-    name: 'JD Awareness'
-  },
-  {
-    id: 'industry',
-    name: 'Industry Awareness'
-  },
-  {
-    id: 'personality',
-    name: 'Personality Fitment'
-  }
+  { id: 'introduction', name: 'Introduction' },
+  { id: 'internship', name: 'Internship/Experience' },
+  { id: 'bodyLanguage', name: 'Body Language' },
+  { id: 'domainKnowledge', name: 'Domain Knowledge' },
+  { id: 'starMethod', name: 'STAR Method' },
+  { id: 'crispness', name: 'Crispness of Answers' },
+  { id: 'situational', name: 'Situational Handling' },
+  { id: 'jdAwareness', name: 'JD Awareness' },
+  { id: 'industry', name: 'Industry Awareness' },
+  { id: 'personality', name: 'Personality Fitment' }
+];
+
+const gdCategories = [
+  { id: 'opening', name: 'Opening', max: 20 },
+  { id: 'speaking', name: 'Speaking', max: 20 },
+  { id: 'teamwork', name: 'Teamwork', max: 20 },
+  { id: 'engagement', name: 'Engagement', max: 20 },
+  { id: 'closing', name: 'Closing', max: 20 }
 ];
 
 const calculateCategoryScore = (evaluation, category) => {
@@ -52,11 +30,8 @@ const calculateCategoryScore = (evaluation, category) => {
 };
 
 const calculateGDTotalScore = (evaluation) => {
-  const categories = ['opening', 'speaking', 'teamwork', 'engagement', 'closing'];
-  return categories.reduce((total, category) => {
-    return total + (evaluation.scores?.[category] 
-      ? Object.values(evaluation.scores[category]).reduce((a, b) => a + b, 0)
-      : 0);
+  return gdCategories.reduce((total, category) => {
+    return total + calculateCategoryScore(evaluation, category.id);
   }, 0);
 };
 
@@ -70,14 +45,50 @@ const calculatePITotalScore = (evaluation) => {
 
 export default function Evaluations() {
   const [sessions, setSessions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [projects, setProjects] = useState([]);
+  const [campuses, setCampuses] = useState([]);
+  const [courses, setCourses] = useState([]);
+  const [specializations, setSpecializations] = useState([]);
+  const [batches, setBatches] = useState([]);
+  const [years, setYears] = useState([]);
+  
   const [filter, setFilter] = useState({
     type: '',
+    project: '',
+    campus: '',
+    course: '',
+    year: '',
+    specialization: '',
     batch: '',
     dateFrom: '',
     dateTo: ''
   });
-  const [loading, setLoading] = useState(true);
-  const [batches, setBatches] = useState([]);
+
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      try {
+        const [projectsSnap, campusesSnap, coursesSnap, specializationsSnap] = await Promise.all([
+          getDocs(collection(db, 'projects')),
+          getDocs(collection(db, 'campuses')),
+          getDocs(collection(db, 'courses')),
+          getDocs(collection(db, 'specializations'))
+        ]);
+
+        setProjects(projectsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        setCampuses(campusesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        setCourses(coursesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        
+        const specsData = specializationsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setSpecializations(specsData);
+        setYears([...new Set(specsData.map(s => s.year))].sort());
+      } catch (err) {
+        console.error("Error fetching data: ", err);
+      }
+    };
+
+    fetchInitialData();
+  }, []);
 
   useEffect(() => {
     if (!auth.currentUser) return;
@@ -91,6 +102,11 @@ export default function Evaluations() {
     ];
     
     if (filter.type) constraints.push(where('type', '==', filter.type));
+    if (filter.project) constraints.push(where('projectId', '==', filter.project));
+    if (filter.campus) constraints.push(where('campusId', '==', filter.campus));
+    if (filter.course) constraints.push(where('courseId', '==', filter.course));
+    if (filter.year) constraints.push(where('year', '==', filter.year));
+    if (filter.specialization) constraints.push(where('specializationId', '==', filter.specialization));
     if (filter.batch) constraints.push(where('batch', '==', filter.batch));
     if (filter.dateFrom) {
       const fromDate = new Date(filter.dateFrom);
@@ -109,14 +125,21 @@ export default function Evaluations() {
       const sessionsData = snapshot.docs.map(doc => ({ 
         id: doc.id, 
         ...doc.data(),
-        completedAt: doc.data().completedAt?.toDate() 
+        completedAt: doc.data().completedAt?.toDate(),
+        // Ensure students array exists and has proper structure
+        students: doc.data().students?.map(s => ({
+          id: s.id || s.studentId || '',
+          name: s.name || s.studentName || 'Unknown Student',
+          email: s.email || s.studentEmail || '',
+          chestNumber: s.chestNumber || 0
+        })) || []
       }));
       
       // Extract unique batches
       const allBatches = [...new Set(sessionsData.map(s => 
-        s.type === 'gd' ? s.batch : s.candidate.batch
-      ))];
-      setBatches(allBatches.filter(b => b));
+        s.batch || (s.candidate?.batch || '')
+      ))].filter(Boolean);
+      setBatches(allBatches);
       
       setSessions(sessionsData);
       setLoading(false);
@@ -128,11 +151,34 @@ export default function Evaluations() {
   const resetFilters = () => {
     setFilter({
       type: '',
+      project: '',
+      campus: '',
+      course: '',
+      year: '',
+      specialization: '',
       batch: '',
       dateFrom: '',
       dateTo: ''
     });
   };
+
+  const filteredCampuses = filter.project 
+    ? campuses.filter(c => c.projectId === filter.project) 
+    : [];
+
+  const filteredCourses = filter.campus
+    ? courses.filter(c => c.campusId === filter.campus)
+    : filter.project
+    ? courses.filter(c => c.projectId === filter.project && !c.campusId)
+    : [];
+
+  const filteredYears = filter.course
+    ? [...new Set(specializations.filter(s => s.courseId === filter.course).map(s => s.year))].sort()
+    : [];
+
+  const filteredSpecializations = filter.course && filter.year
+    ? specializations.filter(s => s.courseId === filter.course && s.year === filter.year)
+    : [];
 
   return (
     <div className="min-h-screen bg-gray-100 p-4">
@@ -141,7 +187,7 @@ export default function Evaluations() {
         
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <h2 className="text-xl font-semibold mb-4">Filters</h2>
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
               <label className="block text-sm text-gray-600 mb-1">Type</label>
               <select
@@ -154,19 +200,117 @@ export default function Evaluations() {
                 <option value="pi">PI</option>
               </select>
             </div>
+            
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Batch</label>
+              <label className="block text-sm text-gray-600 mb-1">Project</label>
               <select
-                value={filter.batch}
-                onChange={(e) => setFilter({...filter, batch: e.target.value})}
+                value={filter.project}
+                onChange={(e) => setFilter({
+                  ...filter, 
+                  project: e.target.value,
+                  campus: '',
+                  course: '',
+                  year: '',
+                  specialization: ''
+                })}
                 className="w-full px-3 py-2 border rounded-lg"
               >
-                <option value="">All Batches</option>
-                {batches.map(batch => (
-                  <option key={batch} value={batch}>{batch}</option>
+                <option value="">All Projects</option>
+                {projects.map(project => (
+                  <option key={project.id} value={project.id}>
+                    {project.code} - {project.name}
+                  </option>
                 ))}
               </select>
             </div>
+            
+            {filter.project && filteredCampuses.length > 0 && (
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Campus</label>
+                <select
+                  value={filter.campus}
+                  onChange={(e) => setFilter({
+                    ...filter, 
+                    campus: e.target.value,
+                    course: '',
+                    year: '',
+                    specialization: ''
+                  })}
+                  className="w-full px-3 py-2 border rounded-lg"
+                >
+                  <option value="">All Campuses</option>
+                  {filteredCampuses.map(campus => (
+                    <option key={campus.id} value={campus.id}>
+                      {campus.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            
+            {(filter.project || filter.campus) && filteredCourses.length > 0 && (
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Course</label>
+                <select
+                  value={filter.course}
+                  onChange={(e) => setFilter({
+                    ...filter, 
+                    course: e.target.value,
+                    year: '',
+                    specialization: ''
+                  })}
+                  className="w-full px-3 py-2 border rounded-lg"
+                >
+                  <option value="">All Courses</option>
+                  {filteredCourses.map(course => (
+                    <option key={course.id} value={course.id}>
+                      {course.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            
+            {filter.course && filteredYears.length > 0 && (
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Year</label>
+                <select
+                  value={filter.year}
+                  onChange={(e) => setFilter({
+                    ...filter, 
+                    year: e.target.value,
+                    specialization: ''
+                  })}
+                  className="w-full px-3 py-2 border rounded-lg"
+                >
+                  <option value="">All Years</option>
+                  {filteredYears.map(year => (
+                    <option key={year} value={year}>
+                      Year {year}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            
+            {filter.course && filter.year && filteredSpecializations.length > 0 && (
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Specialization</label>
+                <select
+                  value={filter.specialization}
+                  onChange={(e) => setFilter({...filter, specialization: e.target.value})}
+                  className="w-full px-3 py-2 border rounded-lg"
+                >
+                  <option value="">All Specializations</option>
+                  {filteredSpecializations.map(specialization => (
+                    <option key={specialization.id} value={specialization.id}>
+                      {specialization.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            
             <div>
               <label className="block text-sm text-gray-600 mb-1">From Date</label>
               <input
@@ -176,6 +320,7 @@ export default function Evaluations() {
                 className="w-full px-3 py-2 border rounded-lg"
               />
             </div>
+            
             <div>
               <label className="block text-sm text-gray-600 mb-1">To Date</label>
               <input
@@ -185,14 +330,15 @@ export default function Evaluations() {
                 className="w-full px-3 py-2 border rounded-lg"
               />
             </div>
-            <div className="flex items-end">
-              <button
-                onClick={resetFilters}
-                className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 py-2 px-4 rounded-lg transition"
-              >
-                Reset Filters
-              </button>
-            </div>
+          </div>
+          
+          <div className="mt-4 flex justify-end">
+            <button
+              onClick={resetFilters}
+              className="bg-gray-200 hover:bg-gray-300 text-gray-800 py-2 px-4 rounded-lg transition"
+            >
+              Reset Filters
+            </button>
           </div>
         </div>
 
@@ -213,12 +359,17 @@ export default function Evaluations() {
                     <div>
                       <h2 className="text-xl font-semibold">
                         {session.type === 'gd' 
-                          ? session.topic 
-                          : `${session.candidate.name} - ${session.candidate.position}`}
+                          ? `${session.groupName} - ${session.topic}` 
+                          : `${session.candidate?.name || 'Candidate'} - ${session.candidate?.position || 'Position'}`}
                       </h2>
                       <p className="text-gray-600">
                         {session.type === 'gd' ? 'GD' : 'PI'} • 
-                        Batch: {session.type === 'gd' ? session.batch : session.candidate.batch} • 
+                        {session.projectId && ` Project: ${projects.find(p => p.id === session.projectId)?.code || ''}`} • 
+                        {session.campusId && ` Campus: ${campuses.find(c => c.id === session.campusId)?.name || ''}`} • 
+                        {session.courseId && ` Course: ${courses.find(c => c.id === session.courseId)?.name || ''}`} • 
+                        {session.year && ` Year: ${session.year}`} • 
+                        {session.specializationId && ` Specialization: ${specializations.find(s => s.id === session.specializationId)?.name || ''}`} • 
+                        Batch: {session.type === 'gd' ? session.batch : session.candidate?.batch || ''} • 
                         Date: {session.completedAt?.toLocaleDateString()} • 
                         Time: {session.completedAt?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </p>
@@ -251,45 +402,70 @@ export default function Evaluations() {
                     <table className="w-full">
                       <thead className="bg-gray-100">
                         <tr>
+                          <th className="px-4 py-3 text-left">Chest No.</th>
                           <th className="px-4 py-3 text-left">Student</th>
-                          <th className="px-4 py-3 text-center">Opening</th>
-                          <th className="px-4 py-3 text-center">Speaking</th>
-                          <th className="px-4 py-3 text-center">Teamwork</th>
-                          <th className="px-4 py-3 text-center">Engagement</th>
-                          <th className="px-4 py-3 text-center">Closing</th>
+                          {gdCategories.map(category => (
+                            <th key={category.id} className="px-4 py-3 text-center">
+                              {category.name} ({category.max})
+                            </th>
+                          ))}
                           <th className="px-4 py-3 text-center">Total</th>
                           <th className="px-4 py-3 text-left">Remarks</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {session.evaluations?.map((evaluation, index) => (
-                          <tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                            <td className="px-4 py-3 font-medium">{evaluation.studentName}</td>
-                            <td className="px-4 py-3 text-center">
-                              {calculateCategoryScore(evaluation, 'opening')}/20
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              {calculateCategoryScore(evaluation, 'speaking')}/25
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              {calculateCategoryScore(evaluation, 'teamwork')}/20
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              {calculateCategoryScore(evaluation, 'engagement')}/10
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              {calculateCategoryScore(evaluation, 'closing')}/20
-                            </td>
-                            <td className="px-4 py-3 text-center font-semibold">
-                              {calculateGDTotalScore(evaluation)}/100
-                            </td>
-                            <td className="px-4 py-3 text-sm text-gray-600 max-w-xs">
-                              <div className="line-clamp-2" title={evaluation.remarks}>
-                                {evaluation.remarks}
-                              </div>
-                            </td>
+                        {/* First show evaluated students */}
+                        {session.evaluations?.map((evaluationItem, index) => {
+                          const student = session.students.find(s => 
+                            s.id === evaluationItem.studentId || 
+                            s.email === evaluationItem.studentEmail
+                          ) || {
+                            name: evaluationItem.studentName || `Student ${index + 1}`,
+                            chestNumber: evaluationItem.chestNumber || index + 1
+                          };
+                          
+                          return (
+                              <tr key={`eval-${index}`} className="bg-white">
+                                <td className="px-4 py-3 font-medium">#{student.chestNumber}</td>
+                                <td className="px-4 py-3">{student.name}</td>
+                                {gdCategories.map(category => (
+                                  <td key={category.id} className="px-4 py-3 text-center">
+                                    {calculateCategoryScore(evaluationItem, category.id)}/{category.max}
+                                  </td>
+                                ))}
+                                <td className="px-4 py-3 text-center font-semibold">
+                                    {calculateGDTotalScore(evaluationItem)}/100
+                                </td>
+                                <td className="px-4 py-3 text-sm text-gray-600 max-w-xs">
+                                    <div className="line-clamp-2" title={evaluationItem.remarks}>
+                                        {evaluationItem.remarks}
+                                    </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        
+                        {/* Then show unevaluated students */}
+                        {session.students
+                        .filter(student => 
+                          !session.evaluations?.some(evaluation => 
+                            evaluation.studentId === student.id || 
+                            evaluation.studentEmail === student.email
+                          )
+                        )
+                        .map((student, index) => (
+                          <tr key={`student-${index}`} className="bg-gray-50">
+                            <td className="px-4 py-3 font-medium">#{student.chestNumber}</td>
+                            <td className="px-4 py-3">{student.name}</td>
+                            {gdCategories.map(category => (
+                              <td key={category.id} className="px-4 py-3 text-center text-gray-400">
+                                  -
+                              </td>
+                            ))}
+                            <td className="px-4 py-3 text-center text-gray-400">-</td>
+                            <td className="px-4 py-3 text-sm text-gray-400">Not evaluated</td>
                           </tr>
-                        ))}
+                      ))}
                       </tbody>
                     </table>
                   </div>

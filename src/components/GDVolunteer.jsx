@@ -186,8 +186,6 @@ const submitStudents = async () => {
                   <tbody>
                     {filteredStudents.map(student => (
                       <tr key={student.id} className="border-t">
-                        <td className="px-3 py-2">{student.name}</td>
-                        <td className="px-3 py-2">{student.email}</td>
                         <td className="px-3 py-2 text-center">
                           <button
                             onClick={() => addStudent(student)}
@@ -197,6 +195,9 @@ const submitStudents = async () => {
                             <FiPlus />
                           </button>
                         </td>
+                        <td className="px-3 py-2">{student.name}</td>
+                        <td className="px-3 py-2">{student.email}</td>
+                        
                       </tr>
                     ))}
                   </tbody>

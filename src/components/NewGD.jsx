@@ -409,17 +409,18 @@ const activateGD = async () => {
                         <tbody>
                           {filteredStudents.map(student => (
                             <tr key={student.id} className="border-t">
-                              <td className="px-3 py-2">{student.name}</td>
-                              <td className="px-3 py-2">{student.email}</td>
-                              <td className="px-3 py-2 text-center">
+                               <td className="px-3 py-2 text-center">
                                 <button
                                   onClick={() => addStudent(student)}
                                   disabled={students.some(s => s.id === student.id)}
                                   className="text-blue-500 hover:text-blue-700 disabled:text-gray-400"
                                 >
-                                  Add
+                                  <strong>+</strong>
                                 </button>
                               </td>
+                              <td className="px-3 py-2">{student.name}</td>
+                              <td className="px-3 py-2">{student.email}</td>
+                             
                             </tr>
                           ))}
                         </tbody>
