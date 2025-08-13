@@ -433,36 +433,39 @@ const activateGD = async () => {
             )}
 
             {students.length > 0 && (
-              <div className="border rounded-lg overflow-hidden">
-                <table className="w-full">
-                  <thead className="bg-gray-100">
-                    <tr>
-                      <th className="px-4 py-2 text-left">Chest No.</th>
-                      <th className="px-4 py-2 text-left">Name</th>
-                      <th className="px-4 py-2 text-left">Email</th>
-                      <th className="px-4 py-2">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {students.map((student, index) => (
-                      <tr key={student.id} className="border-t">
-                        <td className="px-4 py-2 font-medium">{student.chestNumber}</td>
-                        <td className="px-4 py-2">{student.name}</td>
-                        <td className="px-4 py-2">{student.email}</td>
-                        <td className="px-4 py-2 text-center">
-                          <button
-                            onClick={() => removeStudent(student.id)}
-                            className="text-red-500 hover:text-red-700 p-1"
-                          >
-                            <FiX />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+  <div className="border rounded-lg overflow-hidden">
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[300px]">
+        <thead className="bg-gray-100">
+          <tr>
+            <th className="px-4 py-2 text-left">Chest No.</th>
+            <th className="px-4 py-2 text-left">Name</th>
+            <th className="px-4 py-2 text-left hidden sm:table-cell">Email</th>
+            <th className="px-4 py-2">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {students.map((student, index) => (
+            <tr key={student.id} className="border-t">
+              <td className="px-4 py-2 font-medium">{student.chestNumber}</td>
+              <td className="px-4 py-2">{student.name}</td>
+              <td className="px-4 py-2 hidden sm:table-cell">{student.email}</td>
+              <td className="px-4 py-2 text-center">
+                <button
+                  onClick={() => removeStudent(student.id)}
+                  className="text-red-500 hover:text-red-700 p-1 text-lg"
+                  aria-label="Remove student"
+                >
+                  <FiX />
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </div>
+)}
           </div>
 
           <button

@@ -13,12 +13,6 @@ export default function GDVolunteerSuccess() {
         <p className="text-gray-600 mb-6">
           The trainer has been notified and can now start the evaluation process.
         </p>
-        <button
-          onClick={() => navigate('/')}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg"
-        >
-          Return to Dashboard
-        </button>
       </div>
     </div>
   );
