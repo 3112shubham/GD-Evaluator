@@ -108,8 +108,17 @@ export default function NewGD() {
   };
 
   const removeStudent = (studentId) => {
-    setStudents(students.filter(s => s.id !== studentId));
-  };
+  // Filter out the student to be removed
+  const updatedStudents = students.filter(s => s.id !== studentId);
+  
+  // Reassign chest numbers sequentially
+  const reorderedStudents = updatedStudents.map((student, index) => ({
+    ...student,
+    chestNumber: index + 1
+  }));
+  
+  setStudents(reorderedStudents);
+};
 
   const generateLink = async () => {
     if (!groupName || !topic || !selectedSpecialization) return;

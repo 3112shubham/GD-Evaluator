@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { addDoc, collection } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { FiPlus, FiSave, FiX } from 'react-icons/fi';
+import { FiPlus, FiSave, FiX, FiTrash2 } from 'react-icons/fi';
 
 const predefinedCourses = [
   { name: 'MBA', duration: 2 },
@@ -56,6 +56,23 @@ export default function CourseForm({
     } catch (err) {
       console.error("Error adding course: ", err);
       alert("Failed to add course: " + err.message);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this course?')) return;
+    
+    try {
+      await deleteDoc(doc(db, 'courses', id));
+      fetchData();
+      // Reset selection if the deleted course was selected
+      if (selectedCourse === id) {
+        setSelectedCourse(null);
+      }
+      alert('Course deleted successfully');
+    } catch (err) {
+      console.error("Error deleting course: ", err);
+      alert("Failed to delete course: " + err.message);
     }
   };
 
@@ -154,13 +171,24 @@ export default function CourseForm({
         {courses.map(course => (
           <div 
             key={course.id} 
-            className={`p-2 rounded cursor-pointer ${selectedCourse === course.id ? 'bg-blue-100' : 'bg-white hover:bg-gray-100'}`}
+            className={`p-2 rounded cursor-pointer flex justify-between items-center ${selectedCourse === course.id ? 'bg-blue-100' : 'bg-white hover:bg-gray-100'}`}
             onClick={() => setSelectedCourse(course.id)}
           >
-            <div className="font-medium">{course.name}</div>
-            {course.duration && (
-              <div className="text-sm text-gray-600">{course.duration} years</div>
-            )}
+            <div>
+              <div className="font-medium">{course.name}</div>
+              {course.duration && (
+                <div className="text-sm text-gray-600">{course.duration} years</div>
+              )}
+            </div>
+            <button 
+              className="text-red-500 hover:text-red-700"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDelete(course.id);
+              }}
+            >
+              <FiTrash2 />
+            </button>
           </div>
         ))}
       </div>

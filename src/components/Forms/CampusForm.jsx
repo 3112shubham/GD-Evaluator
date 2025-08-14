@@ -50,16 +50,14 @@ export default function CampusForm({ campuses, projects, fetchData, selectedProj
     <div className="border rounded-lg p-4 bg-gray-50">
       <div className="flex justify-between items-center mb-3">
         <h3 className="font-medium">Campuses {hasSingleCampus && '(Auto-selected)'}</h3>
-        {!hasSingleCampus && (
-          <button
-            onClick={() => setIsAdding(!isAdding)}
-            className="text-blue-600 hover:text-blue-800 flex items-center gap-1"
-            disabled={!selectedProject}
-          >
-            {isAdding ? <FiX /> : <FiPlus />}
-            {isAdding ? 'Cancel' : 'Add Campus'}
-          </button>
-        )}
+        <button
+          onClick={() => setIsAdding(!isAdding)}
+          className="text-blue-600 hover:text-blue-800 flex items-center gap-1"
+          disabled={!selectedProject}
+        >
+          {isAdding ? <FiX /> : <FiPlus />}
+          {isAdding ? 'Cancel' : 'Add Campus'}
+        </button>
       </div>
 
       {isAdding && (
@@ -108,22 +106,20 @@ export default function CampusForm({ campuses, projects, fetchData, selectedProj
         </div>
       )}
 
-      {!hasSingleCampus && (
-        <div className="space-y-2 max-h-40 overflow-y-auto">
-          {projectCampuses.map(campus => (
-            <div 
-              key={campus.id} 
-              className={`p-2 rounded cursor-pointer ${selectedCampus === campus.id ? 'bg-blue-100' : 'bg-white hover:bg-gray-100'}`}
-              onClick={() => setSelectedCampus(campus.id)}
-            >
-              <div className="font-medium">{campus.name}</div>
-              {campus.location && (
-                <div className="text-sm text-gray-600">{campus.location}</div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+      <div className="space-y-2 max-h-40 overflow-y-auto">
+        {projectCampuses.map(campus => (
+          <div 
+            key={campus.id} 
+            className={`p-2 rounded cursor-pointer ${selectedCampus === campus.id ? 'bg-blue-100' : 'bg-white hover:bg-gray-100'}`}
+            onClick={() => setSelectedCampus(campus.id)}
+          >
+            <div className="font-medium">{campus.name}</div>
+            {campus.location && (
+              <div className="text-sm text-gray-600">{campus.location}</div>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
