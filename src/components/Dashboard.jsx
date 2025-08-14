@@ -125,16 +125,7 @@ export default function Dashboard() {
             </div>
             <span className="font-medium">New GD Session</span>
           </Link>
-          
-          <Link 
-            to="/new-pi" 
-            className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:border-blue-300 transition flex flex-col items-center justify-center hover:bg-blue-50"
-          >
-            <div className="bg-blue-100 p-3 rounded-full mb-3">
-              <FiUser className="text-blue-600 text-2xl" />
-            </div>
-            <span className="font-medium">New PI Session</span>
-          </Link>
+        
           
           <Link 
             to="/evaluations" 
