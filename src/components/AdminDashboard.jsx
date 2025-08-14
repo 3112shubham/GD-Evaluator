@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { FiPlus, FiUsers, FiLayers, FiUser } from 'react-icons/fi';
+import { FiPlus, FiUsers, FiLayers, FiUser, FiFileText } from 'react-icons/fi';
 import HierarchyView from './HierarchyView';
 import AddTrainer from './AddTrainer';
 import BatchManagement from './BatchManagement';
+import AdminEvaluations from './AdminEvaluations'; // We'll create this new component
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('hierarchy');
@@ -34,6 +35,12 @@ export default function AdminDashboard() {
             >
               <FiUser /> Trainers
             </button>
+            <button
+              onClick={() => setActiveTab('evaluations')}
+              className={`flex items-center gap-2 px-4 py-2 font-medium ${activeTab === 'evaluations' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-600'}`}
+            >
+              <FiFileText /> Evaluations
+            </button>
           </div>
         </div>
 
@@ -41,6 +48,7 @@ export default function AdminDashboard() {
         {activeTab === 'hierarchy' && <HierarchyView />}
         {activeTab === 'batches' && <BatchManagement />}
         {activeTab === 'trainers' && <AddTrainer />}
+        {activeTab === 'evaluations' && <AdminEvaluations />}
       </div>
     </div>
   );

@@ -48,8 +48,13 @@ export default function AddTrainer() {
       );
 
       // Send password reset email
-      await sendPasswordResetEmail(auth, newTrainer.email);
+      const currentUrl = window.location.href.split('?')[0];
 
+    // Send password reset email with dynamic return URL
+    await sendPasswordResetEmail(auth, newTrainer.email, {
+      url: `${currentUrl}?fromPasswordReset=true`,
+      handleCodeInApp: true // Extends expiration to 1 week
+    });
       // Save trainer details to Firestore
       await addDoc(collection(db, 'trainers'), {
         ...newTrainer,

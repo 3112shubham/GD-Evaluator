@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { collection, query, where, onSnapshot, updateDoc, doc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, updateDoc, doc, deleteDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { Link, useNavigate } from 'react-router-dom';
-import { FiPlus, FiUsers, FiBarChart2, FiCalendar, FiUser, FiActivity, FiPlay, FiClock } from 'react-icons/fi';
+import { FiPlus, FiUsers, FiBarChart2, FiCalendar, FiUser, FiActivity, FiPlay, FiClock, FiTrash2 } from 'react-icons/fi';
 
 export default function Dashboard() {
   const [activeGDs, setActiveGDs] = useState([]);
@@ -10,6 +10,7 @@ export default function Dashboard() {
   const [pastGDs, setPastGDs] = useState([]);
   const [pastPIs, setPastPIs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -102,6 +103,25 @@ export default function Dashboard() {
     }
   };
 
+  const confirmDeleteGD = async (gdId) => {
+    if (window.confirm('Are you sure you want to delete this GD session? This action cannot be undone.')) {
+      await deleteGD(gdId);
+    }
+  };
+
+  const deleteGD = async (gdId) => {
+    try {
+      setDeletingId(gdId);
+      await deleteDoc(doc(db, 'sessions', gdId));
+      alert('GD session deleted successfully');
+    } catch (err) {
+      console.error("Error deleting GD session: ", err);
+      alert('Failed to delete GD session');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -125,7 +145,6 @@ export default function Dashboard() {
             </div>
             <span className="font-medium">New GD Session</span>
           </Link>
-        
           
           <Link 
             to="/evaluations" 
@@ -208,13 +227,26 @@ export default function Dashboard() {
                         </span>
                       </div>
                     </div>
-                    <div className="mt-3 flex justify-end">
+                    <div className="mt-3 flex justify-end gap-2">
                       <Link 
                         to={`/gd/${gd.id}`}
-                        className="text-sm text-blue-600 hover:text-blue-800"
+                        className="text-sm text-blue-600 hover:text-blue-800 px-3 py-1 rounded hover:bg-blue-50"
                       >
                         View Results
                       </Link>
+                      <button
+                        onClick={() => confirmDeleteGD(gd.id)}
+                        disabled={deletingId === gd.id}
+                        className="text-sm text-red-600 hover:text-red-800 px-3 py-1 rounded hover:bg-red-50 flex items-center gap-1"
+                      >
+                        {deletingId === gd.id ? (
+                          'Deleting...'
+                        ) : (
+                          <>
+                            <FiTrash2 size={14} /> Delete
+                          </>
+                        )}
+                      </button>
                     </div>
                   </div>
                 ))}
