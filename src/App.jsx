@@ -6,9 +6,14 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import Auth from './components/Auth';
 import Dashboard from './components/Dashboard';
 import NewGD from './components/NewGD';
+import NewPI from './components/NewPI';
 import GDView from './components/GDView';
+import PIView from './components/PIView';
 import Evaluations from './components/Evaluations';
+import GDVolunteer from './components/GDVolunteer';
+import GDVolunteerSuccess from './components/GDVolunteerSuccess';
 import { FiLogOut } from 'react-icons/fi';
+import AdminDashboard from './components/AdminDashboard';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -43,7 +48,7 @@ export default function App() {
       {user && (
         <header className="bg-white shadow-sm">
           <div className="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
-            <h1 className="text-xl font-bold text-blue-600">GD Evaluator</h1>
+            <h1 className="text-xl font-bold text-blue-600">Evaluation System</h1>
             <div className="flex items-center gap-4">
               <span className="text-sm text-gray-600">{user.email}</span>
               <button
@@ -62,9 +67,14 @@ export default function App() {
           <Route path="/login" element={user ? <Navigate to="/" /> : <Auth />} />
           <Route path="/" element={user ? <Dashboard /> : <Navigate to="/login" />} />
           <Route path="/new-gd" element={user ? <NewGD /> : <Navigate to="/login" />} />
+          <Route path="/new-pi" element={user ? <NewPI /> : <Navigate to="/login" />} />
           <Route path="/gd/:gdId" element={user ? <GDView /> : <Navigate to="/login" />} />
+          <Route path="/pi/:piId" element={user ? <PIView /> : <Navigate to="/login" />} />
           <Route path="/evaluations" element={user ? <Evaluations /> : <Navigate to="/login" />} />
+          <Route path="/gd-volunteer/:linkId" element={<GDVolunteer />} />
+          <Route path="/gd-volunteer-success" element={<GDVolunteerSuccess />} />
           <Route path="*" element={<Navigate to={user ? "/" : "/login"} />} />
+          <Route path="/admin" element={user?.email === 'training@gmail.com' ? <AdminDashboard /> : <Navigate to="/" />} />
         </Routes>
       </main>
     </Router>
