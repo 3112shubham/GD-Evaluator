@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db, auth } from '../firebase';
-import { FiSave, FiCheckCircle, FiUser, FiAward, FiUsers, FiPlus, FiChevronDown, FiChevronUp } from 'react-icons/fi';
+import { FiSave, FiCheckCircle, FiUser, FiAward, FiUsers, FiEdit, FiX, FiChevronDown, FiChevronUp } from 'react-icons/fi';
 import { onSnapshot } from 'firebase/firestore';
 
 const categories = [
@@ -72,52 +72,72 @@ export default function GDView() {
   const [activeCategory, setActiveCategory] = useState('opening');
   const [availableStudents, setAvailableStudents] = useState([]);
   const [students, setStudents] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');
   const [availableGDs, setAvailableGDs] = useState([]);
-  // const [showGDsDropdown, setShowGDsDropdown] = useState(false);
-useEffect(() => {
-  const unsubscribe = onSnapshot(doc(db, 'sessions', gdId), (doc) => {
-    if (doc.exists()) {
-      const gdData = doc.data();
-      setGd(gdData);
-      setStudents(gdData.students || []);
-      
-      // Use functional update to avoid dependency
-      setActiveStudent(prev => {
-        if (!prev || !gdData.evaluations) return prev;
-        
-        const updatedEvaluation = gdData.evaluations.find(e => e.studentId === prev.studentId);
-        if (!updatedEvaluation) return prev;
-        
-        return {
-          ...prev,
-          scores: updatedEvaluation.scores,
-          remarks: updatedEvaluation.remarks
-        };
-      });
-    }
-  });
+  const [editingGroupInfo, setEditingGroupInfo] = useState(false);
+  const [groupName, setGroupName] = useState('');
+  const [groupTopic, setGroupTopic] = useState('');
+  const localCacheRef = useRef(null);
+  const autoSaveTimeoutRef = useRef(null);
 
-  return () => unsubscribe();
-}, [gdId]);  // Now only depends on gdId
+  // Initialize local cache
+  useEffect(() => {
+    const cachedData = localStorage.getItem(`gdCache_${gdId}`);
+    if (cachedData) {
+      localCacheRef.current = JSON.parse(cachedData);
+    } else {
+      localCacheRef.current = {
+        evaluations: [],
+        students: []
+      };
+    }
+  }, [gdId]);
+
+  // Save to localStorage when component unmounts
+  useEffect(() => {
+    return () => {
+      if (localCacheRef.current) {
+        localStorage.setItem(`gdCache_${gdId}`, JSON.stringify(localCacheRef.current));
+      }
+    };
+  }, [gdId]);
+
+  // Fetch GD data and set up real-time listener
   useEffect(() => {
     const fetchGD = async () => {
       const docRef = doc(db, 'sessions', gdId);
       const docSnap = await getDoc(docRef);
+      
       if (docSnap.exists()) {
         const gdData = docSnap.data();
-        setGd(gdData);
-        setStudents(gdData.students || []);
         
-        if (gdData.students?.length > 0) {
-          const firstStudent = gdData.students[0];
+        // Merge with cached data if available
+        const mergedEvaluations = localCacheRef.current?.evaluations?.length > 0 
+          ? localCacheRef.current.evaluations 
+          : gdData.evaluations || [];
+        
+        const mergedStudents = localCacheRef.current?.students?.length > 0
+          ? localCacheRef.current.students
+          : gdData.students || [];
+        
+        setGd({
+          ...gdData,
+          evaluations: mergedEvaluations,
+          students: mergedStudents
+        });
+        
+        setGroupName(gdData.groupName || '');
+        setGroupTopic(gdData.topic || '');
+        setStudents(mergedStudents);
+        
+        if (mergedStudents.length > 0) {
+          const firstStudent = mergedStudents[0];
           setActiveStudent({
             studentId: firstStudent.id,
             studentName: firstStudent.name,
             studentEmail: firstStudent.email,
             chestNumber: firstStudent.chestNumber,
-            scores: gdData.evaluations?.find(e => e.studentId === firstStudent.id)?.scores || {},
-            remarks: gdData.evaluations?.find(e => e.studentId === firstStudent.id)?.remarks || ''
+            scores: mergedEvaluations?.find(e => e.studentId === firstStudent.id)?.scores || {},
+            remarks: mergedEvaluations?.find(e => e.studentId === firstStudent.id)?.remarks || ''
           });
         }
         
@@ -144,11 +164,8 @@ useEffect(() => {
             setAvailableStudents(studentsArrays.flat());
           }
         }
-        
-        setLoading(false);
-      } else {
-        setLoading(false);
       }
+      setLoading(false);
     };
 
     const fetchActiveGDs = async () => {
@@ -173,13 +190,43 @@ useEffect(() => {
 
     fetchGD();
     fetchActiveGDs();
+
+    // Set up real-time listener for GD updates (read-only)
+    const unsubscribe = onSnapshot(doc(db, 'sessions', gdId), (doc) => {
+      if (doc.exists()) {
+        const gdData = doc.data();
+        setGd(prev => ({
+          ...prev,
+          ...gdData,
+          // Don't overwrite evaluations and students from local state
+          evaluations: prev?.evaluations || gdData.evaluations || [],
+          students: prev?.students || gdData.students || []
+        }));
+        setGroupName(gdData.groupName || '');
+        setGroupTopic(gdData.topic || '');
+      }
+    });
+
+    return () => unsubscribe();
   }, [gdId]);
 
+  // Update local cache when evaluations or students change
+  useEffect(() => {
+    if (gd) {
+      localCacheRef.current = {
+        evaluations: gd.evaluations || [],
+        students: students
+      };
+    }
+  }, [gd, students]);
+
   const handleScoreChange = useCallback((category, subCategory, value) => {
-    if (!activeStudent || !gd) return;
+    if (!activeStudent) return;
+    
+    const newScore = parseInt(value);
     
     setGd(prevGd => {
-      const updatedEvaluations = prevGd.evaluations?.map(evaluation => {
+      const updatedEvaluations = prevGd?.evaluations?.map(evaluation => {
         if (evaluation.studentId === activeStudent.studentId) {
           return {
             ...evaluation,
@@ -187,7 +234,7 @@ useEffect(() => {
               ...evaluation.scores,
               [category]: {
                 ...evaluation.scores[category],
-                [subCategory]: parseInt(value)
+                [subCategory]: newScore
               }
             }
           };
@@ -207,10 +254,8 @@ useEffect(() => {
             teamwork: { acknowledging: 0, questions: 0, timeSharing: 0, collaboration: 0 },
             engagement: { multiplePerspectives: 0, awarenessIssues: 0, bodyLanguage: 0, handlingPressure: 0 },
             closing: { conclusionClarity: 0, summaryPoints: 0, closingConfidence: 0 },
-            ...activeStudent.scores,
             [category]: {
-              ...(activeStudent.scores?.[category] || {}),
-              [subCategory]: parseInt(value)
+              [subCategory]: newScore
             }
           },
           remarks: activeStudent.remarks || ''
@@ -226,17 +271,25 @@ useEffect(() => {
         ...prev.scores,
         [category]: {
           ...prev.scores[category],
-          [subCategory]: parseInt(value)
+          [subCategory]: newScore
         }
       }
     }));
-  }, [activeStudent, gd]);
+
+    // Debounce auto-save
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+    }
+    autoSaveTimeoutRef.current = setTimeout(() => {
+      localStorage.setItem(`gdCache_${gdId}`, JSON.stringify(localCacheRef.current));
+    }, 1000);
+  }, [activeStudent, gdId]);
 
   const handleRemarksChange = useCallback((remarks) => {
-    if (!activeStudent || !gd) return;
+    if (!activeStudent) return;
     
     setGd(prevGd => {
-      const updatedEvaluations = prevGd.evaluations?.map(evaluation => {
+      const updatedEvaluations = prevGd?.evaluations?.map(evaluation => {
         if (evaluation.studentId === activeStudent.studentId) {
           return { ...evaluation, remarks };
         }
@@ -264,18 +317,45 @@ useEffect(() => {
     });
     
     setActiveStudent(prev => ({ ...prev, remarks }));
-  }, [activeStudent, gd]);
+
+    // Debounce auto-save
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+    }
+    autoSaveTimeoutRef.current = setTimeout(() => {
+      localStorage.setItem(`gdCache_${gdId}`, JSON.stringify(localCacheRef.current));
+    }, 1000);
+  }, [activeStudent, gdId]);
 
   const saveEvaluation = async () => {
     if (!gd) return;
     setSaving(true);
     try {
       await updateDoc(doc(db, 'sessions', gdId), {
-        evaluations: gd.evaluations || []
+        evaluations: gd.evaluations || [],
+        students: students
       });
+      // Clear cache after successful save
+      localStorage.removeItem(`gdCache_${gdId}`);
       setSaving(false);
     } catch (err) {
       console.error("Error saving evaluation: ", err);
+      setSaving(false);
+    }
+  };
+
+  const saveGroupInfo = async () => {
+    if (!gd) return;
+    setSaving(true);
+    try {
+      await updateDoc(doc(db, 'sessions', gdId), {
+        groupName,
+        topic: groupTopic
+      });
+      setEditingGroupInfo(false);
+      setSaving(false);
+    } catch (err) {
+      console.error("Error saving group info: ", err);
       setSaving(false);
     }
   };
@@ -286,11 +366,16 @@ useEffect(() => {
     try {
       await updateDoc(doc(db, 'sessions', gdId), {
         evaluations: gd.evaluations || [],
+        students: students,
         completed: true,
         completedAt: new Date(),
         isActive: false,
-        type: 'gd'
+        type: 'gd',
+        groupName,
+        topic: groupTopic
       });
+      // Clear cache after completion
+      localStorage.removeItem(`gdCache_${gdId}`);
       navigate('/dashboard', { replace: true });
     } catch (err) {
       console.error("Error completing GD: ", err);
@@ -327,6 +412,10 @@ useEffect(() => {
         scores: {},
         remarks: ''
       });
+
+      // Update cache
+      localCacheRef.current.students = [...students, newStudent];
+      localStorage.setItem(`gdCache_${gdId}`, JSON.stringify(localCacheRef.current));
     }
   };
 
@@ -349,9 +438,16 @@ useEffect(() => {
         setActiveStudent(null);
       }
     }
+
+    // Update cache
+    localCacheRef.current.students = students.filter(s => s.id !== studentId);
+    localCacheRef.current.evaluations = gd.evaluations?.filter(e => e.studentId !== studentId) || [];
+    localStorage.setItem(`gdCache_${gdId}`, JSON.stringify(localCacheRef.current));
   };
 
   const switchGD = (newGdId) => {
+    // Save current state to cache before switching
+    localStorage.setItem(`gdCache_${gdId}`, JSON.stringify(localCacheRef.current));
     navigate(`/gd/${newGdId}`);
   };
 
@@ -402,11 +498,63 @@ useEffect(() => {
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-4xl mx-auto">
         <div className="bg-white rounded-xl shadow-sm p-6 mb-6 border border-gray-100">
-          {/* GD Selection Dropdown */}
-            <div className="mb-6">
-            <h1 className="text-2xl font-bold text-gray-800 mb-1">{gd.groupName}</h1>
-            <h2 className="text-lg text-gray-600 mb-3">{gd.topic}</h2>
-            
+          {/* GD Selection Dropdown and Info Section */}
+          <div className="mb-6">
+            {editingGroupInfo ? (
+              <div className="space-y-3 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Group Name</label>
+                  <input
+                    type="text"
+                    value={groupName}
+                    onChange={(e) => setGroupName(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Discussion Topic</label>
+                  <input
+                    type="text"
+                    value={groupTopic}
+                    onChange={(e) => setGroupTopic(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={saveGroupInfo}
+                    disabled={saving}
+                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition disabled:opacity-50"
+                  >
+                    <FiSave /> Save Changes
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEditingGroupInfo(false);
+                      setGroupName(gd.groupName || '');
+                      setGroupTopic(gd.topic || '');
+                    }}
+                    className="flex items-center gap-2 bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg transition"
+                  >
+                    <FiX /> Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex justify-between items-start">
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-800 mb-1">{gd.groupName}</h1>
+                  <h2 className="text-lg text-gray-600 mb-3">{gd.topic}</h2>
+                </div>
+                <button
+                  onClick={() => setEditingGroupInfo(true)}
+                  className="flex items-center gap-1 text-blue-600 hover:text-blue-800"
+                >
+                  <FiEdit size={16} /> Edit
+                </button>
+              </div>
+            )}
+
             {availableGDs.length > 0 && (
               <div className="mb-4">
                 <h2 className="text-lg font-semibold mb-2">Active GDs</h2>
@@ -436,7 +584,7 @@ useEffect(() => {
                 <FiAward className="text-gray-500" /> Highest: {Math.max(...(
                   gd.evaluations?.map(e => 
                     Object.values(e.scores).flatMap(c => Object.values(c)).reduce((a, b) => a + b, 0)
-                  ) || []
+                  ) || [0]
                 ))}/100
               </div>
             </div>
