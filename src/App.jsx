@@ -45,22 +45,6 @@ export default function App() {
 
   return (
     <Router basename='/'>
-      {user && (
-        <header className="bg-white shadow-sm">
-          <div className="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
-            <h1 className="text-xl font-bold text-blue-600">Evaluation System</h1>
-            <div className="flex items-center gap-4">
-              <span className="text-sm text-gray-600">{user.email}</span>
-              <button
-                onClick={handleLogout}
-                className="text-gray-500 hover:text-red-500 transition flex items-center gap-1 text-sm"
-              >
-                <FiLogOut /> Logout
-              </button>
-            </div>
-          </div>
-        </header>
-      )}
       
       <main className="min-h-[calc(100vh-64px)] bg-gray-50">
         <Routes>
