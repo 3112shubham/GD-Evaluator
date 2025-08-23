@@ -129,11 +129,13 @@ export default function AdminEvaluations() {
             id: doc.id, 
             ...doc.data(),
             completedAt: doc.data().completedAt?.toDate(),
+            // normalize student objects so we have consistent fields to match against
+            // leave missing ids/emails as undefined/null (not empty string) to avoid accidental matches
             students: doc.data().students?.map(s => ({
-              id: s.id || s.studentId || '',
-              name: s.name || s.studentName || 'Unknown Student',
-              email: s.email || s.studentEmail || '',
-              chestNumber: s.chestNumber || 0
+              id: s.id || s.studentId || s.studentIdString || undefined,
+              name: s.name || s.studentName || (s.student?.name) || 'Unknown Student',
+              email: s.email || s.studentEmail || (s.student?.email) || undefined,
+              chestNumber: typeof s.chestNumber !== 'undefined' ? s.chestNumber : (s.chestNo || s.chest || null)
             })) || []
           }));
 
@@ -190,6 +192,37 @@ export default function AdminEvaluations() {
     });
   };
 
+  // helper to find student in a session by multiple fallback keys
+  const findStudentInSession = (session, { studentId, studentEmail, chestNumber, studentName } = {}) => {
+    if (!session || !session.students) return null;
+
+    // try by id
+    if (studentId) {
+      const byId = session.students.find(s => s.id && s.id === studentId);
+      if (byId) return byId;
+    }
+
+    // try by email
+    if (studentEmail) {
+      const byEmail = session.students.find(s => s.email && s.email === studentEmail);
+      if (byEmail) return byEmail;
+    }
+
+    // try by chestNumber (strict match)
+    if (typeof chestNumber !== 'undefined' && chestNumber !== null) {
+      const byChest = session.students.find(s => s.chestNumber !== null && s.chestNumber !== undefined && +s.chestNumber === +chestNumber);
+      if (byChest) return byChest;
+    }
+
+    // try by name (last resort)
+    if (studentName) {
+      const byName = session.students.find(s => s.name && s.name === studentName);
+      if (byName) return byName;
+    }
+
+    return null;
+  };
+
   const exportToExcel = () => {
     const excelData = sessions.flatMap(session => {
       const project = projects.find(p => p.id === session.projectId) || { code: '', name: '' };
@@ -199,10 +232,12 @@ export default function AdminEvaluations() {
 
       if (session.type === 'gd') {
         return session.evaluations?.map(evaluation => {
-          const student = session.students.find(s => 
-            s.id === evaluation.studentId || 
-            s.email === evaluation.studentEmail
-          ) || {
+          const student = findStudentInSession(session, {
+            studentId: evaluation.studentId,
+            studentEmail: evaluation.studentEmail,
+            chestNumber: evaluation.chestNumber,
+            studentName: evaluation.studentName
+          }) || {
             name: evaluation.studentName || 'Unknown Student',
             chestNumber: evaluation.chestNumber || 0
           };
@@ -527,10 +562,12 @@ export default function AdminEvaluations() {
                         </thead>
                         <tbody>
                           {session.evaluations?.map((evaluationItem, index) => {
-                            const student = session.students.find(s => 
-                              s.id === evaluationItem.studentId || 
-                              s.email === evaluationItem.studentEmail
-                            ) || {
+                            const student = findStudentInSession(session, {
+                              studentId: evaluationItem.studentId,
+                              studentEmail: evaluationItem.studentEmail,
+                              chestNumber: evaluationItem.chestNumber,
+                              studentName: evaluationItem.studentName
+                            }) || {
                               name: evaluationItem.studentName || `Student ${index + 1}`,
                               chestNumber: evaluationItem.chestNumber || index + 1
                             };
@@ -558,10 +595,14 @@ export default function AdminEvaluations() {
                           
                           {session.students
                           .filter(student => 
-                            !session.evaluations?.some(evaluation => 
-                              evaluation.studentId === student.id || 
-                              evaluation.studentEmail === student.email
-                            )
+                            !session.evaluations?.some(evaluation => {
+                              // match evaluation to student by id, email, chestNumber or name
+                              if (student.id && evaluation.studentId && student.id === evaluation.studentId) return true;
+                              if (student.email && evaluation.studentEmail && student.email === evaluation.studentEmail) return true;
+                              if (student.chestNumber !== null && student.chestNumber !== undefined && evaluation.chestNumber !== undefined && +student.chestNumber === +evaluation.chestNumber) return true;
+                              if (student.name && evaluation.studentName && student.name === evaluation.studentName) return true;
+                              return false;
+                            })
                           )
                           .map((student, index) => (
                             <tr key={`student-${index}`} className="bg-gray-50">

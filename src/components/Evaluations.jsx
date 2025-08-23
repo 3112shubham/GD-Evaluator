@@ -126,12 +126,12 @@ export default function Evaluations() {
         id: doc.id, 
         ...doc.data(),
         completedAt: doc.data().completedAt?.toDate(),
-        // Ensure students array exists and has proper structure
+        // normalize student objects similar to AdminEvaluations
         students: doc.data().students?.map(s => ({
-          id: s.id || s.studentId || '',
-          name: s.name || s.studentName || 'Unknown Student',
-          email: s.email || s.studentEmail || '',
-          chestNumber: s.chestNumber || 0
+          id: s.id || s.studentId || s.studentIdString || undefined,
+          name: s.name || s.studentName || (s.student?.name) || 'Unknown Student',
+          email: s.email || s.studentEmail || (s.student?.email) || undefined,
+          chestNumber: typeof s.chestNumber !== 'undefined' ? s.chestNumber : (s.chestNo || s.chest || null)
         })) || []
       }));
       
@@ -160,6 +160,33 @@ export default function Evaluations() {
       dateFrom: '',
       dateTo: ''
     });
+  };
+
+  // helper to find student in a session by id/email/chestNumber/name
+  const findStudentInSession = (session, { studentId, studentEmail, chestNumber, studentName } = {}) => {
+    if (!session || !session.students) return null;
+
+    if (studentId) {
+      const byId = session.students.find(s => s.id && s.id === studentId);
+      if (byId) return byId;
+    }
+
+    if (studentEmail) {
+      const byEmail = session.students.find(s => s.email && s.email === studentEmail);
+      if (byEmail) return byEmail;
+    }
+
+    if (typeof chestNumber !== 'undefined' && chestNumber !== null) {
+      const byChest = session.students.find(s => s.chestNumber !== null && s.chestNumber !== undefined && +s.chestNumber === +chestNumber);
+      if (byChest) return byChest;
+    }
+
+    if (studentName) {
+      const byName = session.students.find(s => s.name && s.name === studentName);
+      if (byName) return byName;
+    }
+
+    return null;
   };
 
   const filteredCampuses = filter.project 
@@ -416,10 +443,12 @@ export default function Evaluations() {
                       <tbody>
                         {/* First show evaluated students */}
                         {session.evaluations?.map((evaluationItem, index) => {
-                          const student = session.students.find(s => 
-                            s.id === evaluationItem.studentId || 
-                            s.email === evaluationItem.studentEmail
-                          ) || {
+                          const student = findStudentInSession(session, {
+                            studentId: evaluationItem.studentId,
+                            studentEmail: evaluationItem.studentEmail,
+                            chestNumber: evaluationItem.chestNumber,
+                            studentName: evaluationItem.studentName
+                          }) || {
                             name: evaluationItem.studentName || `Student ${index + 1}`,
                             chestNumber: evaluationItem.chestNumber || index + 1
                           };
@@ -448,10 +477,13 @@ export default function Evaluations() {
                         {/* Then show unevaluated students */}
                         {session.students
                         .filter(student => 
-                          !session.evaluations?.some(evaluation => 
-                            evaluation.studentId === student.id || 
-                            evaluation.studentEmail === student.email
-                          )
+                          !session.evaluations?.some(evaluation => {
+                            if (student.id && evaluation.studentId && student.id === evaluation.studentId) return true;
+                            if (student.email && evaluation.studentEmail && student.email === evaluation.studentEmail) return true;
+                            if (student.chestNumber !== null && student.chestNumber !== undefined && evaluation.chestNumber !== undefined && +student.chestNumber === +evaluation.chestNumber) return true;
+                            if (student.name && evaluation.studentName && student.name === evaluation.studentName) return true;
+                            return false;
+                          })
                         )
                         .map((student, index) => (
                           <tr key={`student-${index}`} className="bg-gray-50">

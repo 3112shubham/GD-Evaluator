@@ -55,7 +55,7 @@ export default function App() {
           <Route path="/gd/:gdId" element={user ? <GDView /> : <Navigate to="/login" />} />
           <Route path="/pi/:piId" element={user ? <PIView /> : <Navigate to="/login" />} />
           <Route path="/evaluations" element={user ? <Evaluations /> : <Navigate to="/login" />} />
-          <Route path="/gd/gd-volunteer/:linkId" element={<GDVolunteer />} />
+          <Route path="/gd-volunteer/:linkId" element={<GDVolunteer />} />
           <Route path="/gd-volunteer-success" element={<GDVolunteerSuccess />} />
           <Route path="*" element={<Navigate to={user ? "/" : "/login"} />} />
           <Route path="/admin" element={user?.email === 'training@gmail.com' ? <AdminDashboard /> : <Navigate to="/" />} />
