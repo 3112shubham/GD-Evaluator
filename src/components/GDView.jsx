@@ -376,7 +376,7 @@ export default function GDView() {
       });
       // Clear cache after completion
       localStorage.removeItem(`gdCache_${gdId}`);
-      navigate('/dashboard', { replace: true });
+      navigate('/gd', { replace: true });
     } catch (err) {
       console.error("Error completing GD: ", err);
       setSaving(false);

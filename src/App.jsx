@@ -48,17 +48,17 @@ export default function App() {
       
       <main className="min-h-[calc(100vh-64px)] bg-gray-50">
         <Routes>
-          <Route path="/login" element={user ? <Navigate to="/" /> : <Auth />} />
-          <Route path="/" element={user ? <Dashboard /> : <Navigate to="/login" />} />
-          <Route path="/new-gd" element={user ? <NewGD /> : <Navigate to="/login" />} />
-          <Route path="/new-pi" element={user ? <NewPI /> : <Navigate to="/login" />} />
-          <Route path="/gd/:gdId" element={user ? <GDView /> : <Navigate to="/login" />} />
-          <Route path="/pi/:piId" element={user ? <PIView /> : <Navigate to="/login" />} />
-          <Route path="/evaluations" element={user ? <Evaluations /> : <Navigate to="/login" />} />
-          <Route path="/gd-volunteer/:linkId" element={<GDVolunteer />} />
-          <Route path="/gd-volunteer-success" element={<GDVolunteerSuccess />} />
-          <Route path="*" element={<Navigate to={user ? "/" : "/login"} />} />
-          <Route path="/admin" element={user?.email === 'training@gmail.com' ? <AdminDashboard /> : <Navigate to="/" />} />
+          <Route path="/gd/login" element={user ? <Navigate to="/gd" /> : <Auth />} />
+          <Route path="/gd" element={user ? <Dashboard /> : <Navigate to="/gd/login" />} />
+          <Route path="/gd/new-gd" element={user ? <NewGD /> : <Navigate to="/gd/login" />} />
+          <Route path="/gd/new-pi" element={user ? <NewPI /> : <Navigate to="/gd/login" />} />
+          <Route path="/gd/:gdId" element={user ? <GDView /> : <Navigate to="/gd/login" />} />
+          <Route path="/gd/pi/:piId" element={user ? <PIView /> : <Navigate to="/gd/login" />} />
+          <Route path="/gd/evaluations" element={user ? <Evaluations /> : <Navigate to="/gdlogin" />} />
+          <Route path="/gd/gd-volunteer/:linkId" element={<GDVolunteer />} />
+          <Route path="/gd/gd-volunteer-success" element={<GDVolunteerSuccess />} />
+          <Route path="*" element={<Navigate to={user ? "/" : "/gd/login"} />} />
+          <Route path="/gd/admin" element={user?.email === 'training@gmail.com' ? <AdminDashboard /> : <Navigate to="/gd" />} />
         </Routes>
       </main>
     </Router>

@@ -125,7 +125,7 @@ export default function GDVolunteer() {
       setSubmitted(true);
       
       setTimeout(() => {
-        navigate('/gd-volunteer-success');
+        navigate('/gd/gd-volunteer-success');
       }, 1500);
     } catch (err) {
       console.error("Error submitting students: ", err);

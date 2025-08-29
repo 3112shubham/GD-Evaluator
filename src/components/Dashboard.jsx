@@ -161,10 +161,10 @@ export default function Dashboard() {
                 <span className="text-xl font-bold ">ASSESS HUB</span>
               </div>
               <div className="hidden md:ml-10 md:flex md:space-x-8">
-                <Link to="/dashboard" className="border-b-2 border-white px-1 pt-1 text-sm font-medium flex items-center">
+                <Link to="/gd" className="border-b-2 border-white px-1 pt-1 text-sm font-medium flex items-center">
                   <FiHome className="mr-1" /> Dashboard
                 </Link>
-                <Link to="/evaluations" className="border-transparent hover:border-blue-300 border-b-2 px-1 pt-1 text-sm font-medium flex items-center">
+                <Link to="/gd/evaluations" className="border-transparent hover:border-blue-300 border-b-2 px-1 pt-1 text-sm font-medium flex items-center">
                   <FiAward className="mr-1" /> Evaluations
                 </Link>
               </div>
@@ -192,7 +192,7 @@ export default function Dashboard() {
         {/* Quick Actions */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
           <Link 
-            to="/new-gd" 
+            to="/gd/new-gd" 
             className="bg-white p-6 rounded-xl shadow-md border border-blue-100 hover:border-blue-300 transition-all duration-300 hover:shadow-lg flex flex-col items-center justify-center group relative overflow-hidden"
           >
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-indigo-600"></div>
@@ -204,7 +204,7 @@ export default function Dashboard() {
           </Link>
           
           <Link 
-            to="/evaluations" 
+            to="/gd/evaluations" 
             className="bg-white p-6 rounded-xl shadow-md border border-blue-100 hover:border-blue-300 transition-all duration-300 hover:shadow-lg flex flex-col items-center justify-center group relative overflow-hidden"
           >
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-indigo-600"></div>
@@ -250,7 +250,7 @@ export default function Dashboard() {
                 <FiActivity className="mx-auto text-blue-300 mb-3" size={32} />
                 <p className="text-blue-600">No active GD sessions</p>
                 <Link 
-                  to="/new-gd"
+                  to="/gd/new-gd"
                   className="inline-block mt-3 text-blue-700 hover:text-blue-800 text-sm font-medium"
                 >
                   Create your first session →
