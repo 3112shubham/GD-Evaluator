@@ -1,16 +1,16 @@
 import { useState, useEffect } from 'react';
-import { collection, getDocs, deleteDoc, doc, addDoc } from 'firebase/firestore';
+import { collection, getDocs, deleteDoc, doc, addDoc, query, where } from 'firebase/firestore';
 import { db, auth } from '../firebase';
-import { createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
-import { FiEdit, FiTrash2, FiUserPlus } from 'react-icons/fi';
-
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getAuth as getAuthFromApp, createUserWithEmailAndPassword, sendPasswordResetEmail, signOut as signOutAuth } from 'firebase/auth';
+import { firebaseConfig } from '../firebase';
+import { FiEdit, FiTrash2, FiUserPlus, FiMail } from 'react-icons/fi';
 export default function AddTrainer() {
   const [trainers, setTrainers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [newTrainer, setNewTrainer] = useState({
     name: '',
-    email: '',
-    contact: ''
+    email: ''
   });
 
   useEffect(() => {
@@ -19,7 +19,8 @@ export default function AddTrainer() {
 
   const fetchTrainers = async () => {
     setLoading(true);
-    const trainersSnapshot = await getDocs(collection(db, 'trainers'));
+    const q = query(collection(db, 'trainers'), where('role', '==', 'user'));
+    const trainersSnapshot = await getDocs(q);
     setTrainers(trainersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     setLoading(false);
   };
@@ -38,32 +39,47 @@ export default function AddTrainer() {
         return;
       }
 
-      const tempPassword = Math.random().toString(36).slice(-8); 
+      const tempPassword = Math.random().toString(36).slice(-8);
 
-      // Create user
+      // Create user using a secondary Firebase App instance so the admin stays logged in
+      let secondaryApp;
+      if (!getApps().some(a => a.name === 'createUserApp')) {
+        secondaryApp = initializeApp(firebaseConfig, 'createUserApp');
+      } else {
+        secondaryApp = getApp('createUserApp');
+      }
+
+      const secondaryAuth = getAuthFromApp(secondaryApp);
       const userCredential = await createUserWithEmailAndPassword(
-        auth,
+        secondaryAuth,
         newTrainer.email,
         tempPassword
       );
 
-      // Send password reset email
-      const currentUrl = window.location.href.split('?')[0];
+      // Sign out the secondary auth so it doesn't remain signed-in
+      try {
+        await signOutAuth(secondaryAuth);
+      } catch (signOutErr) {
+        console.warn('Could not sign out secondary auth:', signOutErr);
+      }
 
-    // Send password reset email with dynamic return URL
-    await sendPasswordResetEmail(auth, newTrainer.email, {
-      url: `${currentUrl}?fromPasswordReset=true`,
-      handleCodeInApp: true // Extends expiration to 1 week
-    });
-      // Save trainer details to Firestore
+      // Send password reset email using the main auth instance
+      const currentUrl = window.location.href.split('?')[0];
+      await sendPasswordResetEmail(auth, newTrainer.email, {
+        url: `${currentUrl}?fromPasswordReset=true`,
+        handleCodeInApp: true
+      });
+
+      // Save trainer details to Firestore with default 'user' role
       await addDoc(collection(db, 'trainers'), {
         ...newTrainer,
         userId: userCredential.user.uid,
+        role: 'user',
         createdAt: new Date()
       });
 
       alert(`Trainer added! Password reset sent to ${newTrainer.email}`);
-      setNewTrainer({ name: '', email: '', contact: '' });
+      setNewTrainer({ name: '', email: '' });
       fetchTrainers();
 
     } catch (err) {
@@ -82,16 +98,39 @@ export default function AddTrainer() {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this trainer?')) return;
+  const handleDelete = async (id, trainer) => {
+    if (!window.confirm('Are you sure you want to permanently delete this trainer? This action cannot be undone.')) return;
     
     try {
+      // Only delete trainer document from Firestore (do NOT delete from Firebase Auth)
       await deleteDoc(doc(db, 'trainers', id));
+
       fetchTrainers();
-      alert('Trainer deleted successfully');
+      alert('Trainer deleted from database. Firebase Authentication user was not removed.');
     } catch (err) {
       console.error("Error deleting trainer: ", err);
-      alert("Failed to delete trainer: " + err.message);
+      try {
+        // Attempt to at least remove the DB entry if initial attempt failed
+        await deleteDoc(doc(db, 'trainers', id));
+        fetchTrainers();
+        alert('Trainer deleted from database. Note: The Firebase Authentication user may need manual deletion.');
+      } catch (firestoreErr) {
+        alert("Failed to delete trainer: " + firestoreErr.message);
+      }
+    }
+  };
+
+  const handleResendPassword = async (trainer) => {
+    try {
+      const currentUrl = window.location.href.split('?')[0];
+      await sendPasswordResetEmail(auth, trainer.email, {
+        url: `${currentUrl}?fromPasswordReset=true`,
+        handleCodeInApp: true
+      });
+      alert(`Password reset email sent to ${trainer.email}`);
+    } catch (err) {
+      console.error("Error sending password reset: ", err);
+      alert("Failed to send password reset email: " + err.message);
     }
   };
 
@@ -133,17 +172,6 @@ export default function AddTrainer() {
           />
         </div>
         
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Contact Number</label>
-          <input
-            type="text"
-            value={newTrainer.contact}
-            onChange={(e) => setNewTrainer({...newTrainer, contact: e.target.value})}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-            placeholder="+91 9876543210"
-          />
-        </div>
-        
         <button
           onClick={addTrainer}
           disabled={!newTrainer.name || !newTrainer.email}
@@ -166,7 +194,6 @@ export default function AddTrainer() {
                 <tr>
                   <th className="px-4 py-2 text-left">Name</th>
                   <th className="px-4 py-2 text-left">Email</th>
-                  <th className="px-4 py-2 text-left">Contact</th>
                   <th className="px-4 py-2">Actions</th>
                 </tr>
               </thead>
@@ -175,15 +202,19 @@ export default function AddTrainer() {
                   <tr key={trainer.id} className="border-t hover:bg-gray-50">
                     <td className="px-4 py-2">{trainer.name}</td>
                     <td className="px-4 py-2">{trainer.email}</td>
-                    <td className="px-4 py-2">{trainer.contact || 'N/A'}</td>
                     <td className="px-4 py-2 text-center">
                       <div className="flex justify-center gap-2">
-                        <button className="text-blue-500 hover:text-blue-700">
-                          <FiEdit />
+                        <button 
+                          className="text-green-500 hover:text-green-700 flex items-center gap-1"
+                          onClick={() => handleResendPassword(trainer)}
+                          title="Resend password reset email"
+                        >
+                          <FiMail /> Resend
                         </button>
                         <button 
                           className="text-red-500 hover:text-red-700"
-                          onClick={() => handleDelete(trainer.id)}
+                          onClick={() => handleDelete(trainer.id, trainer)}
+                          title="Delete trainer"
                         >
                           <FiTrash2 />
                         </button>

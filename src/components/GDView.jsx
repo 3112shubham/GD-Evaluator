@@ -2,8 +2,9 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db, auth } from '../firebase';
-import { FiSave, FiCheckCircle, FiUser, FiAward, FiUsers, FiEdit, FiX, FiChevronDown, FiChevronUp } from 'react-icons/fi';
+import { FiSave, FiCheckCircle, FiUser, FiAward, FiUsers, FiEdit, FiX, FiChevronDown, FiChevronUp, FiShare2, FiCopy, FiRefreshCw, FiArrowLeft } from 'react-icons/fi';
 import { onSnapshot } from 'firebase/firestore';
+import QRCode from 'react-qr-code';
 
 const categories = [
   { 
@@ -76,6 +77,7 @@ export default function GDView() {
   const [editingGroupInfo, setEditingGroupInfo] = useState(false);
   const [groupName, setGroupName] = useState('');
   const [groupTopic, setGroupTopic] = useState('');
+  const [showQRModal, setShowQRModal] = useState(false);
   const localCacheRef = useRef(null);
   const autoSaveTimeoutRef = useRef(null);
 
@@ -115,9 +117,15 @@ export default function GDView() {
           ? localCacheRef.current.evaluations 
           : gdData.evaluations || [];
         
-        const mergedStudents = localCacheRef.current?.students?.length > 0
+        let mergedStudents = localCacheRef.current?.students?.length > 0
           ? localCacheRef.current.students
           : gdData.students || [];
+        
+        // Assign chest numbers to students if they don't have them
+        mergedStudents = mergedStudents.map((student, index) => ({
+          ...student,
+          chestNumber: student.chestNumber || (index + 1)
+        }));
         
         setGd({
           ...gdData,
@@ -132,12 +140,12 @@ export default function GDView() {
         if (mergedStudents.length > 0) {
           const firstStudent = mergedStudents[0];
           setActiveStudent({
-            studentId: firstStudent.id,
+            studentId: firstStudent.chestNumber,
             studentName: firstStudent.name,
             studentEmail: firstStudent.email,
             chestNumber: firstStudent.chestNumber,
-            scores: mergedEvaluations?.find(e => e.studentId === firstStudent.id)?.scores || {},
-            remarks: mergedEvaluations?.find(e => e.studentId === firstStudent.id)?.remarks || ''
+            scores: mergedEvaluations?.find(e => e.studentId === firstStudent.chestNumber)?.scores || {},
+            remarks: mergedEvaluations?.find(e => e.studentId === firstStudent.chestNumber)?.remarks || ''
           });
         }
         
@@ -195,13 +203,22 @@ export default function GDView() {
     const unsubscribe = onSnapshot(doc(db, 'sessions', gdId), (doc) => {
       if (doc.exists()) {
         const gdData = doc.data();
+        
+        // Process students from database to assign chest numbers
+        let dbStudents = gdData.students || [];
+        dbStudents = dbStudents.map((student, index) => ({
+          ...student,
+          chestNumber: student.chestNumber || (index + 1)
+        }));
+        
         setGd(prev => ({
           ...prev,
           ...gdData,
-          // Don't overwrite evaluations and students from local state
           evaluations: prev?.evaluations || gdData.evaluations || [],
-          students: prev?.students || gdData.students || []
+          students: dbStudents
         }));
+        
+        setStudents(dbStudents);
         setGroupName(gdData.groupName || '');
         setGroupTopic(gdData.topic || '');
       }
@@ -405,10 +422,10 @@ export default function GDView() {
       setStudents([...students, newStudent]);
       
       setActiveStudent({
-        studentId: newStudent.id,
+        studentId: chestNumber,
         studentName: newStudent.name,
         studentEmail: newStudent.email,
-        chestNumber: newStudent.chestNumber,
+        chestNumber: chestNumber,
         scores: {},
         remarks: ''
       });
@@ -427,12 +444,12 @@ export default function GDView() {
       if (remainingStudents.length > 0) {
         const nextStudent = remainingStudents[0];
         setActiveStudent({
-          studentId: nextStudent.id,
+          studentId: nextStudent.chestNumber,
           studentName: nextStudent.name,
           studentEmail: nextStudent.email,
           chestNumber: nextStudent.chestNumber,
-          scores: gd.evaluations?.find(e => e.studentId === nextStudent.id)?.scores || {},
-          remarks: gd.evaluations?.find(e => e.studentId === nextStudent.id)?.remarks || ''
+          scores: gd.evaluations?.find(e => e.studentId === nextStudent.chestNumber)?.scores || {},
+          remarks: gd.evaluations?.find(e => e.studentId === nextStudent.chestNumber)?.remarks || ''
         });
       } else {
         setActiveStudent(null);
@@ -440,7 +457,7 @@ export default function GDView() {
     }
 
     // Update cache
-    localCacheRef.current.students = students.filter(s => s.id !== studentId);
+    localCacheRef.current.students = students.filter(s => s.chestNumber !== studentId);
     localCacheRef.current.evaluations = gd.evaluations?.filter(e => e.studentId !== studentId) || [];
     localStorage.setItem(`gdCache_${gdId}`, JSON.stringify(localCacheRef.current));
   };
@@ -541,18 +558,47 @@ export default function GDView() {
                 </div>
               </div>
             ) : (
-              <div className="flex justify-between items-start">
+              <>
+                {/* Top row with action icons */}
+                <div className="flex justify-between items-center mb-4">
+                  <button
+                    onClick={() => navigate('/dashboard')}
+                    className="p-2 hover:bg-gray-200 rounded-lg transition"
+                    title="Back to Dashboard"
+                  >
+                    <FiArrowLeft size={20} className="text-gray-600" />
+                  </button>
+                  <div className="flex gap-3 bg-gray-50 p-3 rounded-lg">
+                    <button
+                      onClick={() => window.location.reload()}
+                      className="p-2 hover:bg-gray-200 rounded-lg transition"
+                      title="Refresh page"
+                    >
+                      <FiRefreshCw size={20} className="text-purple-600" />
+                    </button>
+                    <button
+                      onClick={() => setShowQRModal(true)}
+                      className="p-2 hover:bg-gray-200 rounded-lg transition"
+                      title="Show QR Code"
+                    >
+                      <FiShare2 size={20} className="text-green-600" />
+                    </button>
+                    <button
+                      onClick={() => setEditingGroupInfo(true)}
+                      className="p-2 hover:bg-gray-200 rounded-lg transition"
+                      title="Edit group info"
+                    >
+                      <FiEdit size={20} className="text-blue-600" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Group info below */}
                 <div>
                   <h1 className="text-2xl font-bold text-gray-800 mb-1">{gd.groupName}</h1>
                   <h2 className="text-lg text-gray-600 mb-3">{gd.topic}</h2>
                 </div>
-                <button
-                  onClick={() => setEditingGroupInfo(true)}
-                  className="flex items-center gap-1 text-blue-600 hover:text-blue-800"
-                >
-                  <FiEdit size={16} /> Edit
-                </button>
-              </div>
+              </>
             )}
 
             {availableGDs.length > 0 && (
@@ -599,19 +645,19 @@ export default function GDView() {
           <div className="mb-6">
             <h2 className="text-lg font-semibold mb-3">Students</h2>
             <div className="flex flex-wrap gap-2">
-              {students.map((student) => (
+              {students.map((student, index) => (
                 <button
-                  key={student.id}
+                  key={student.chestNumber || index}
                   onClick={() => setActiveStudent({
-                    studentId: student.id,
+                    studentId: student.chestNumber,
                     studentName: student.name,
                     studentEmail: student.email,
                     chestNumber: student.chestNumber,
-                    scores: gd.evaluations?.find(e => e.studentId === student.id)?.scores || {},
-                    remarks: gd.evaluations?.find(e => e.studentId === student.id)?.remarks || ''
+                    scores: gd.evaluations?.find(e => e.studentId === student.chestNumber)?.scores || {},
+                    remarks: gd.evaluations?.find(e => e.studentId === student.chestNumber)?.remarks || ''
                   })}
                   className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 ${
-                    activeStudent?.studentId === student.id 
+                    activeStudent?.studentId === student.chestNumber 
                       ? 'bg-blue-500 text-white' 
                       : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                   }`}
@@ -692,6 +738,48 @@ export default function GDView() {
                 </button>
               </div>
             </>
+          )}
+
+          {/* QR Code Modal */}
+          {showQRModal && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-lg p-8 max-w-md w-full shadow-lg">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-xl font-bold text-gray-800">GD Registration QR Code</h2>
+                  <button
+                    onClick={() => setShowQRModal(false)}
+                    className="text-gray-500 hover:text-gray-700"
+                  >
+                    <FiX size={24} />
+                  </button>
+                </div>
+                <p className="text-gray-600 mb-4 text-sm">Students can scan this QR code to register for this GD session:</p>
+                <div className="flex justify-center bg-gray-50 p-4 rounded-lg mb-4">
+                  <QRCode 
+                    value={`${window.location.origin}/gd/gd-volunteer/${gdId}`}
+                    size={200}
+                    level="H"
+                  />
+                </div>
+                <p className="text-gray-600 text-sm mb-4">
+                  <strong>Group:</strong> {gd.groupName}<br/>
+                  <strong>Topic:</strong> {gd.topic}
+                </p>
+                <button
+                  onClick={() => {
+                    const link = `${window.location.origin}/gd/gd-volunteer/${gdId}`;
+                    navigator.clipboard.writeText(link).then(() => {
+                      alert('Link copied to clipboard!');
+                    }).catch(() => {
+                      alert('Failed to copy link');
+                    });
+                  }}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition flex items-center justify-center gap-2"
+                >
+                  <FiCopy size={16} /> Copy Link
+                </button>
+              </div>
+            </div>
           )}
         </div>
       </div>
