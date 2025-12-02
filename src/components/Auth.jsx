@@ -1,7 +1,8 @@
 // src/components/Auth.jsx
 import { useState, useEffect } from 'react';
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../firebase';
+import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { auth, db } from '../firebase';
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { FiLogIn, FiEye, FiEyeOff, FiMail, FiLock } from 'react-icons/fi';
 
@@ -30,7 +31,29 @@ export default function Auth() {
     setError('');
     
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      
+      // Ensure the authenticated user has a trainer record (match by userId)
+      const trainersCol = collection(db, 'trainers');
+      const q = query(trainersCol, where('userId', '==', userCredential.user.uid));
+      const querySnap = await getDocs(q);
+
+      if (querySnap.empty) {
+        // No trainer record -> sign out and show error
+        await signOut(auth);
+        setError('Your account is not registered as a trainer. Please contact an administrator.');
+        setIsLoading(false);
+        return;
+      } else {
+        const trainerData = querySnap.docs[0].data();
+        const role = trainerData.role || 'user';
+        if (role === 'dead') {
+          await signOut(auth);
+          setError('This account has been deactivated. Please contact an administrator.');
+          setIsLoading(false);
+          return;
+        }
+      }
       
       // Redirect to the original path or dashboard
       const from = location.state?.from?.pathname || '/';

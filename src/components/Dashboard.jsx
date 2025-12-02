@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { collection, query, where, onSnapshot, updateDoc, doc, deleteDoc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
+import { signOut } from 'firebase/auth';
 import { Link, useNavigate } from 'react-router-dom';
 import { FiPlus, FiUsers, FiBarChart2, FiCalendar, FiUser, FiActivity, FiPlay, FiClock, FiTrash2, FiLogOut, FiHome, FiAward } from 'react-icons/fi';
 
@@ -126,8 +127,11 @@ export default function Dashboard() {
   };
 
   const handleLogout = async () => {
+    const confirmed = window.confirm('Are you sure you want to logout?');
+    if (!confirmed) return;
+
     try {
-      await auth.signOut();
+      await signOut(auth);
       navigate('/');
     } catch (error) {
       console.error('Error signing out:', error);

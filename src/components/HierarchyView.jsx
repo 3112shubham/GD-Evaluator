@@ -1,35 +1,25 @@
 import { useState, useEffect } from 'react';
-import { collection, getDocs, doc, deleteDoc, addDoc, query, where } from 'firebase/firestore';
+import { collection, getDocs, doc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { FiEdit, FiTrash2, FiChevronDown, FiChevronUp, FiSave, FiX, FiUserPlus, FiUpload, FiUsers, FiArrowLeft, FiDownload } from 'react-icons/fi';
-import ProjectForm from './Forms/ProjectForm';
-import CampusForm from './Forms/CampusForm';
-import CourseForm from './Forms/CourseForm';
-import SpecializationForm from './Forms/SpecializationForm';
-import * as XLSX from 'xlsx';
+import { FiTrash2, FiPlus, FiX } from 'react-icons/fi';
+import ProjectFormModal from './Forms/ProjectFormModal';
+import CampusFormModal from './Forms/CampusFormModal';
+import AddSpecializationModal from './Forms/AddSpecializationModal';
+import Modal from './Modal';
 
 export default function HierarchyView() {
   const [projects, setProjects] = useState([]);
   const [campuses, setCampuses] = useState([]);
-  const [courses, setCourses] = useState([]);
-  const [years] = useState([1, 2, 3, 4, 5, 6]);
-  const [specializations, setSpecializations] = useState([]);
-  const [trainers, setTrainers] = useState([]);
   const [loading, setLoading] = useState(true);
-  
-  // Selected hierarchy
+
   const [selectedProject, setSelectedProject] = useState(null);
   const [selectedCampus, setSelectedCampus] = useState(null);
-  const [selectedCourse, setSelectedCourse] = useState(null);
-  const [selectedYear, setSelectedYear] = useState(null);
-  const [selectedSpecialization, setSelectedSpecialization] = useState(null);
 
-  // UI states
-  const [excelFile, setExcelFile] = useState(null);
-  const [showStudentForm, setShowStudentForm] = useState(false);
-  const [showTrainerForm, setShowTrainerForm] = useState(false);
-  const [assignedTrainers, setAssignedTrainers] = useState({});
-  const [students, setStudents] = useState([]);
+  const [showProjectForm, setShowProjectForm] = useState(false);
+  const [showCampusForm, setShowCampusForm] = useState(false);
+  const [showAddCourseForm, setShowAddCourseForm] = useState(false);
+  const [showSpecModal, setShowSpecModal] = useState(false);
+  const [selectedCourseCategory, setSelectedCourseCategory] = useState(null);
 
   useEffect(() => {
     fetchData();
@@ -37,222 +27,68 @@ export default function HierarchyView() {
 
   const fetchData = async () => {
     setLoading(true);
-    
-    // Fetch projects
-    const projectsSnapshot = await getDocs(collection(db, 'projects'));
-    setProjects(projectsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    
-    // Fetch campuses
-    const campusesSnapshot = await getDocs(collection(db, 'campuses'));
-    setCampuses(campusesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    
-    // Fetch courses
-    const coursesSnapshot = await getDocs(collection(db, 'courses'));
-    setCourses(coursesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    
-    // Fetch specializations
-    const specializationsSnapshot = await getDocs(collection(db, 'specializations'));
-    setSpecializations(specializationsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    
-    // Fetch trainers
-    const trainersSnapshot = await getDocs(collection(db, 'trainers'));
-    setTrainers(trainersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    
-    setLoading(false);
-  };
-
-  const fetchStudents = async (specializationId) => {
-    if (!specializationId) return;
-    
     try {
-      const batchesQuery = query(
-        collection(db, 'batches'),
-        where('specializationId', '==', specializationId)
-      );
-      const batchesSnapshot = await getDocs(batchesQuery);
-      
-      if (batchesSnapshot.empty) {
-        setStudents([]);
-        return;
+      const projectsSnapshot = await getDocs(collection(db, 'projects'));
+      const projectsList = projectsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setProjects(projectsList);
+
+      let allCampuses = [];
+      for (const project of projectsList) {
+        const campusesRef = collection(db, 'projects', project.id, 'campuses');
+        const campusesSnapshot = await getDocs(campusesRef);
+        allCampuses = [...allCampuses, ...campusesSnapshot.docs.map(doc => ({
+          id: doc.id,
+          projectId: project.id,
+          ...doc.data()
+        }))];
       }
-      
-      const studentsPromises = batchesSnapshot.docs.map(async batchDoc => {
-        const studentsSnapshot = await getDocs(
-          collection(db, 'batches', batchDoc.id, 'students')
-        );
-        return studentsSnapshot.docs.map(studentDoc => ({
-          id: studentDoc.id,
-          ...studentDoc.data()
-        }));
-      });
-      
-      const studentsArrays = await Promise.all(studentsPromises);
-      setStudents(studentsArrays.flat());
+      setCampuses(allCampuses);
     } catch (err) {
-      console.error("Error fetching students: ", err);
-      alert("Failed to fetch students: " + err.message);
+      console.error('Error fetching data:', err);
+      alert('Failed to fetch data');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleDelete = async (collectionName, id) => {
+  const handleDelete = async (collectionName, id, projectId = null) => {
     if (!window.confirm('Are you sure you want to delete this item?')) return;
-    
     try {
-      await deleteDoc(doc(db, collectionName, id));
+      if (collectionName === 'projects') {
+        // Delete all campuses (subcollection) under this project first
+        const campusesRef = collection(db, 'projects', id, 'campuses');
+        const campusesSnapshot = await getDocs(campusesRef);
+        
+        for (const campusDoc of campusesSnapshot.docs) {
+          await deleteDoc(doc(db, 'projects', id, 'campuses', campusDoc.id));
+        }
+        
+        // Then delete the project
+        await deleteDoc(doc(db, 'projects', id));
+      } else if (collectionName === 'campuses' && projectId) {
+        await deleteDoc(doc(db, 'projects', projectId, 'campuses', id));
+      } else {
+        await deleteDoc(doc(db, collectionName, id));
+      }
       fetchData();
       alert('Deleted successfully');
     } catch (err) {
-      console.error("Error deleting: ", err);
-      alert("Failed to delete: " + err.message);
+      console.error('Error deleting:', err);
+      alert('Failed to delete: ' + err.message);
     }
   };
 
-  const handleExcelUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+  const filteredCampuses = selectedProject
+    ? campuses.filter(c => c.projectId === selectedProject)
+    : [];
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const data = new Uint8Array(e.target.result);
-      const workbook = XLSX.read(data, { type: 'array' });
-      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      const jsonData = XLSX.utils.sheet_to_json(worksheet);
-
-      if (jsonData.length > 0) {
-        const studentsData = jsonData.map(row => ({
-          name: row['Name'] || row['name'] || row[Object.keys(row)[0]] || '',
-          email: row['Email'] || row['email'] || row[Object.keys(row)[1]] || '',
-          rollNumber: row['Roll Number'] || row['rollNumber'] || '',
-          specializationId: selectedSpecialization,
-          year: selectedYear,
-          joinedDate: new Date()
-        }));
-
-        setStudents(studentsData.filter(s => s.name && s.email));
-      }
-    };
-    reader.readAsArrayBuffer(file);
-    setExcelFile(file.name);
-  };
-
-  const uploadStudents = async () => {
-    if (students.length === 0) {
-      alert("No students to upload");
-      return;
-    }
-
-    try {
-      // Create a new batch
-      const batchRef = await addDoc(collection(db, 'batches'), {
-        name: `Batch-${new Date().toISOString().slice(0, 10)}`,
-        projectId: selectedProject,
-        campusId: selectedCampus || null,
-        courseId: selectedCourse,
-        year: selectedYear,
-        specializationId: selectedSpecialization,
-        createdAt: new Date()
-      });
-
-      // Add students to the batch
-      const studentsCollection = collection(db, 'batches', batchRef.id, 'students');
-      const addStudentPromises = students.map(student => 
-        addDoc(studentsCollection, student)
-      );
-
-      await Promise.all(addStudentPromises);
-      
-      alert(`${students.length} students added successfully!`);
-      setStudents([]);
-      setExcelFile(null);
-      fetchData();
-    } catch (err) {
-      console.error("Error adding students: ", err);
-      alert("Failed to add students: " + err.message);
-    }
-  };
-
-  const assignTrainer = async (specializationId, trainerId) => {
-    if (!trainerId) return;
-    
-    try {
-      await addDoc(collection(db, 'specialization_trainers'), {
-        specializationId,
-        trainerId,
-        assignedAt: new Date()
-      });
-      
-      setAssignedTrainers({
-        ...assignedTrainers,
-        [specializationId]: trainerId
-      });
-      alert('Trainer assigned successfully!');
-    } catch (err) {
-      console.error("Error assigning trainer: ", err);
-      alert("Failed to assign trainer: " + err.message);
-    }
-  };
-
-  const exportStudentsToExcel = () => {
-    if (students.length === 0) {
-      alert("No students to export");
-      return;
-    }
-
-    const ws = XLSX.utils.json_to_sheet(students.map(s => ({
-      Name: s.name,
-      Email: s.email,
-      'Roll Number': s.rollNumber || '',
-      'Join Date': s.joinedDate?.toDate().toLocaleDateString() || ''
-    })));
-
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Students");
-    XLSX.writeFile(wb, `Students_${selectedSpecialization}.xlsx`);
-  };
-
-  // Navigation functions
   const goBack = () => {
-    if (selectedSpecialization) {
-      setSelectedSpecialization(null);
-      setStudents([]);
-    } else if (selectedYear) {
-      setSelectedYear(null);
-    } else if (selectedCourse) {
-      setSelectedCourse(null);
-      setSelectedYear(null);
-      setSelectedSpecialization(null);
-    } else if (selectedCampus) {
+    if (selectedCampus) {
       setSelectedCampus(null);
-      setSelectedCourse(null);
-      setSelectedYear(null);
-      setSelectedSpecialization(null);
     } else if (selectedProject) {
       setSelectedProject(null);
-      setSelectedCampus(null);
-      setSelectedCourse(null);
-      setSelectedYear(null);
-      setSelectedSpecialization(null);
     }
   };
-
-  // Get filtered data
-  const filteredCampuses = selectedProject 
-    ? campuses.filter(c => c.projectId === selectedProject) 
-    : [];
-
-  const filteredCourses = selectedCampus
-    ? courses.filter(c => c.campusId === selectedCampus)
-    : selectedProject
-    ? courses.filter(c => c.projectId === selectedProject && !c.campusId)
-    : [];
-
-  const filteredSpecializations = selectedCourse
-    ? specializations.filter(s => s.courseId === selectedCourse)
-    : [];
-
-  const availableYears = selectedCourse 
-    ? [...new Set(filteredSpecializations.map(s => s.year))].sort() 
-    : [];
 
   if (loading) {
     return (
@@ -263,343 +99,176 @@ export default function HierarchyView() {
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      {/* Left Side - Forms */}
-      <div className="bg-white rounded-lg shadow-md p-6 space-y-6">
-        <ProjectForm 
-          projects={projects} 
-          fetchData={fetchData} 
-          selectedProject={selectedProject}
-          setSelectedProject={setSelectedProject}
-        />
-
-        {selectedProject && (
-          <CampusForm 
-            campuses={filteredCampuses}
-            projects={projects}
-            fetchData={fetchData}
-            selectedProject={selectedProject}
-            selectedCampus={selectedCampus}
-            setSelectedCampus={setSelectedCampus}
-          />
-        )}
-
-        {(selectedProject && (selectedCampus || filteredCampuses.length === 0)) && (
-          <CourseForm 
-            courses={filteredCourses}
-            fetchData={fetchData}
-            selectedProject={selectedProject}
-            selectedCampus={selectedCampus}
-            selectedCourse={selectedCourse}
-            setSelectedCourse={setSelectedCourse}
-          />
-        )}
-
-        {selectedCourse && (
-          <SpecializationForm 
-            specializations={filteredSpecializations}
-            years={years}
-            fetchData={fetchData}
-            selectedCourse={selectedCourse}
-            selectedYear={selectedYear}
-            setSelectedYear={setSelectedYear}
-            selectedSpecialization={selectedSpecialization}
-            setSelectedSpecialization={setSelectedSpecialization}
-          />
-        )}
+    <div className="bg-white rounded-lg shadow-md p-6">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-semibold">Hierarchy View</h2>
       </div>
-      
-      {/* Right Side - Hierarchy View */}
-      <div className="lg:col-span-2 bg-white rounded-lg shadow-md p-6">
+
+      {/* Projects Section */}
+      <div className="border rounded-lg p-4 bg-blue-50 mb-4">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold">Hierarchy View</h2>
-          {(selectedProject || selectedCampus || selectedCourse || selectedYear || selectedSpecialization) && (
-            <button
-              onClick={goBack}
-              className="text-blue-600 hover:text-blue-800 flex items-center gap-1"
-            >
-              <FiArrowLeft /> Back
-            </button>
-          )}
+          <div className="text-lg font-semibold">Projects</div>
+          <button
+            onClick={() => setShowProjectForm(true)}
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm transition-colors"
+          >
+            <FiPlus /> Add Project
+          </button>
         </div>
-        
-        {/* Projects */}
-        <div className="border rounded-lg p-4 bg-blue-50">
-          <div className="font-medium">Projects</div>
-          <div className="mt-3 space-y-2">
-            {projects.map(project => (
-              <div 
-                key={project.id} 
-                className={`p-2 rounded flex justify-between items-center ${selectedProject === project.id ? 'bg-blue-100' : 'bg-white'}`}
+
+        <div className="space-y-2">
+          {projects.length === 0 ? (
+            <p className="text-gray-500">No projects added yet</p>
+          ) : (
+            projects.map(project => (
+              <div
+                key={project.id}
+                className={`p-3 rounded border cursor-pointer transition-all ${
+                  selectedProject === project.id
+                    ? 'bg-blue-100 border-blue-400'
+                    : 'bg-white border-blue-200 hover:bg-blue-50'
+                } flex justify-between items-center group`}
                 onClick={() => {
                   setSelectedProject(project.id);
                   setSelectedCampus(null);
-                  setSelectedCourse(null);
-                  setSelectedYear(null);
-                  setSelectedSpecialization(null);
                 }}
               >
-                <span className="font-mono">{project.code}</span>
-                <div className="flex gap-2">
-                  <button 
-                    className="text-red-500 hover:text-red-700"
+                <span className="font-mono font-semibold">{project.code}</span>
+                <button
+                  className="text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete('projects', project.id);
+                  }}
+                >
+                  <FiTrash2 />
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Campuses Section - Shows when project is selected */}
+      {selectedProject && (
+        <div className="border rounded-lg p-4 bg-green-50 mb-4">
+          <div className="flex justify-between items-center mb-4">
+            <div className="text-lg font-semibold">Campuses</div>
+            <button
+              onClick={() => setShowCampusForm(true)}
+              className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-sm transition-colors"
+            >
+              <FiPlus /> Add Campus
+            </button>
+          </div>
+
+          <div className="space-y-2">
+            {filteredCampuses.length === 0 ? (
+              <p className="text-gray-500">No campuses for this project</p>
+            ) : (
+              filteredCampuses.map(campus => (
+                <div
+                  key={campus.id}
+                  className={`p-3 rounded border cursor-pointer transition-all ${
+                    selectedCampus === campus.id
+                      ? 'bg-green-100 border-green-400'
+                      : 'bg-white border-green-200 hover:bg-green-50'
+                  } flex justify-between items-center group`}
+                  onClick={() => setSelectedCampus(campus.id)}
+                >
+                  <span>{campus.name}</span>
+                  <button
+                    className="text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity"
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleDelete('projects', project.id);
+                      handleDelete('campuses', campus.id, selectedProject);
                     }}
                   >
                     <FiTrash2 />
                   </button>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
+      )}
 
-        {/* Campuses */}
-        {selectedProject && filteredCampuses.length > 0 && (
-          <div className="mt-4 border rounded-lg p-4 bg-blue-50">
-            <div className="font-medium">Campuses</div>
-            <div className="mt-3 ml-4 space-y-2">
-              {filteredCampuses.map(campus => (
-                <div 
-                  key={campus.id} 
-                  className={`p-2 rounded flex justify-between items-center ${selectedCampus === campus.id ? 'bg-blue-100' : 'bg-white'}`}
-                  onClick={() => {
-                    setSelectedCampus(campus.id);
-                    setSelectedCourse(null);
-                    setSelectedYear(null);
-                    setSelectedSpecialization(null);
-                  }}
-                >
-                  <span>{campus.name}</span>
-                  <div className="flex gap-2">
-                    <button 
-                      className="text-red-500 hover:text-red-700"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDelete('campuses', campus.id);
-                      }}
-                    >
-                      <FiTrash2 />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
+      {/* Courses Section - Shows when campus is selected */}
+      {selectedProject && selectedCampus && (
+        <div className="border rounded-lg p-4 bg-purple-50">
+          <div className="text-lg font-semibold mb-4">
+            {campuses.find(c => c.id === selectedCampus)?.name} - Specializations
           </div>
-        )}
 
-        {/* Courses */}
-        {selectedProject && (selectedCampus || filteredCampuses.length === 0) && filteredCourses.length > 0 && (
-          <div className="mt-4 border rounded-lg p-4 bg-blue-50">
-            <div className="font-medium">Courses</div>
-            <div className="mt-3 ml-4 space-y-2">
-              {filteredCourses.map(course => (
-                <div 
-                  key={course.id} 
-                  className={`p-2 rounded flex justify-between items-center ${selectedCourse === course.id ? 'bg-blue-100' : 'bg-white'}`}
-                  onClick={() => {
-                    setSelectedCourse(course.id);
-                    setSelectedYear(null);
-                    setSelectedSpecialization(null);
-                  }}
-                >
-                  <span>{course.name}</span>
-                  <div className="flex gap-2">
-                    {course.isCustom && (
-                      <button 
-                        className="text-red-500 hover:text-red-700"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDelete('courses', course.id);
-                        }}
-                      >
-                        <FiTrash2 />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Years with Specializations */}
-        {selectedCourse && availableYears.length > 0 && (
-          <div className="mt-4 border rounded-lg p-4 bg-blue-50">
-            <div className="font-medium">Years</div>
-            <div className="mt-3 ml-4 space-y-4">
-              {availableYears.map(year => {
-                const yearSpecializations = filteredSpecializations.filter(s => s.year === year);
-                return (
-                  <div key={year} className="space-y-2">
-                    <div 
-                      className={`p-2 rounded flex justify-between items-center ${selectedYear === year ? 'bg-blue-100' : 'bg-white'}`}
+          <div className="space-y-3">
+            {Object.entries(campuses.find(c => c.id === selectedCampus)?.courses || {}).map(
+              ([category, specList]) => (
+                <div key={category} className="bg-white p-3 rounded border border-purple-200">
+                  <div className="flex justify-between items-center mb-2">
+                    <div className="font-semibold text-purple-700">{category}</div>
+                    <button
                       onClick={() => {
-                        setSelectedYear(year);
-                        setSelectedSpecialization(null);
+                        setSelectedCourseCategory(category);
+                        setShowSpecModal(true);
                       }}
+                      className="text-purple-600 hover:text-purple-800 flex items-center justify-center w-6 h-6 rounded-full hover:bg-purple-100"
+                      title="Add specialization"
                     >
-                      <span>Year {year}</span>
-                    </div>
-
-                    {selectedYear === year && yearSpecializations.length > 0 && (
-                      <div className="ml-4 space-y-2">
-                        {yearSpecializations.map(specialization => (
-                          <div 
-                            key={specialization.id} 
-                            className={`p-2 rounded flex justify-between items-center ${selectedSpecialization === specialization.id ? 'bg-blue-100' : 'bg-white'}`}
-                            onClick={() => {
-                              setSelectedSpecialization(specialization.id);
-                              fetchStudents(specialization.id);
-                            }}
-                          >
-                            <span>{specialization.name}</span>
-                            <div className="flex gap-2">
-                              <button 
-                                className="text-red-500 hover:text-red-700"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDelete('specializations', specialization.id);
-                                }}
-                              >
-                                <FiTrash2 />
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+                      <FiPlus size={18} />
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {specList && specList.length > 0 ? (
+                      specList.map((spec, idx) => (
+                        <span
+                          key={idx}
+                          className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm"
+                        >
+                          {spec}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-gray-500 text-sm">No specializations added</span>
                     )}
                   </div>
-                );
-              })}
-            </div>
+                </div>
+              )
+            )}
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Student and Trainer Management (Only for selected specialization) */}
-        {selectedSpecialization && (
-          <div className="mt-4 border rounded-lg p-4 bg-blue-50">
-            <div className="font-medium mb-3">Management for {specializations.find(s => s.id === selectedSpecialization)?.name}</div>
-            
-            {/* Student Management */}
-            <div className="mb-4">
-              <div className="flex justify-between items-center mb-2">
-                <span className="font-medium">Students</span>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setShowStudentForm(!showStudentForm)}
-                    className="text-blue-600 hover:text-blue-800 flex items-center gap-1 text-sm"
-                  >
-                    {showStudentForm ? <FiX /> : <FiUpload />}
-                    {showStudentForm ? 'Close' : 'Upload'}
-                  </button>
-                  {students.length > 0 && (
-                    <button
-                      onClick={exportStudentsToExcel}
-                      className="text-green-600 hover:text-green-800 flex items-center gap-1 text-sm"
-                    >
-                      <FiDownload /> Export
-                    </button>
-                  )}
-                </div>
-              </div>
+      {showProjectForm && (
+        <Modal onClose={() => setShowProjectForm(false)}>
+          <ProjectFormModal
+            onClose={() => setShowProjectForm(false)}
+            fetchData={fetchData}
+          />
+        </Modal>
+      )}
 
-              {showStudentForm && (
-                <div className="space-y-3 mb-3 p-3 bg-white rounded border">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Upload Student List (Excel)
-                  </label>
-                  <label className="cursor-pointer bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-lg border border-gray-300 flex items-center justify-between text-sm">
-                    <span>{excelFile || 'Choose File'}</span>
-                    <FiUpload size={14} />
-                    <input 
-                      type="file" 
-                      accept=".xlsx,.xls" 
-                      onChange={handleExcelUpload}
-                      className="hidden"
-                    />
-                  </label>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Excel should have columns: Name, Email, Roll Number
-                  </p>
-                  
-                  {students.length > 0 && (
-                    <button
-                      onClick={uploadStudents}
-                      className="w-full bg-green-600 hover:bg-green-700 text-white py-1 px-2 rounded text-sm"
-                    >
-                      Import {students.length} Students
-                    </button>
-                  )}
-                </div>
-              )}
+      {showCampusForm && (
+        <Modal onClose={() => setShowCampusForm(false)}>
+          <CampusFormModal
+            onClose={() => setShowCampusForm(false)}
+            selectedProjectId={selectedProject}
+            fetchData={fetchData}
+          />
+        </Modal>
+      )}
 
-              {students.length > 0 && (
-                <div className="border rounded p-2 max-h-40 overflow-y-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="text-left p-1">Name</th>
-                        <th className="text-left p-1">Email</th>
-                        <th className="text-left p-1">Roll No.</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {students.slice(0, 5).map((student, i) => (
-                        <tr key={i} className="border-b">
-                          <td className="p-1">{student.name}</td>
-                          <td className="p-1">{student.email}</td>
-                          <td className="p-1">{student.rollNumber || '-'}</td>
-                        </tr>
-                      ))}
-                      {students.length > 5 && (
-                        <tr>
-                          <td colSpan={3} className="text-center p-1 text-gray-500">
-                            + {students.length - 5} more students
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-
-            {/* Trainer Management */}
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <span className="font-medium">Trainer</span>
-                <button
-                  onClick={() => setShowTrainerForm(!showTrainerForm)}
-                  className="text-blue-600 hover:text-blue-800 flex items-center gap-1 text-sm"
-                >
-                  {showTrainerForm ? <FiX /> : <FiUserPlus />}
-                  {showTrainerForm ? 'Close' : 'Assign'}
-                </button>
-              </div>
-
-              {showTrainerForm && (
-                <div className="space-y-3 p-3 bg-white rounded border">
-                  <select
-                    className="w-full p-2 border rounded text-sm"
-                    onChange={(e) => assignTrainer(selectedSpecialization, e.target.value)}
-                    value={assignedTrainers[selectedSpecialization] || ''}
-                  >
-                    <option value="">Select Trainer</option>
-                    {trainers.map(trainer => (
-                      <option key={trainer.id} value={trainer.id}>
-                        {trainer.name} ({trainer.email})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
+      {showSpecModal && selectedCourseCategory && (
+        <Modal onClose={() => setShowSpecModal(false)}>
+          <AddSpecializationModal
+            onClose={() => setShowSpecModal(false)}
+            campusId={selectedCampus}
+            projectId={selectedProject}
+            courseCategory={selectedCourseCategory}
+            currentSpecializations={campuses.find(c => c.id === selectedCampus)?.courses[selectedCourseCategory] || []}
+            fetchData={fetchData}
+          />
+        </Modal>
+      )}
     </div>
   );
 }
