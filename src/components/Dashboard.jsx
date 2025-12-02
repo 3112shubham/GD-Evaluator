@@ -24,16 +24,18 @@ export default function Dashboard() {
       query(
         collection(db, 'sessions'), 
         where('type', '==', 'gd'),
-        where('completed', '==', false),
-        where('isActive', '==', true),
         where('trainerId', '==', auth.currentUser.uid)
       ), 
       (snapshot) => {
-        setActiveGDs(snapshot.docs.map(doc => ({ 
-          id: doc.id, 
-          ...doc.data(),
-          date: doc.data().createdAt?.toDate().toLocaleDateString() 
-        })));
+        // Filter to show only sessions that are active and not completed
+        const active = snapshot.docs
+          .filter(doc => doc.data().isActive && !doc.data().completed)
+          .map(doc => ({ 
+            id: doc.id, 
+            ...doc.data(),
+            date: doc.data().createdAt?.toDate?.().toLocaleDateString?.() || new Date().toLocaleDateString()
+          }));
+        setActiveGDs(active);
         setLoading(false);
       }
     );
@@ -279,15 +281,22 @@ export default function Dashboard() {
                       </span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <div className="text-xs text-blue-600">
-                        {gd.participants?.length || 0} participants
+                      <div className="flex gap-4 text-xs text-blue-600">
+                        <span className="flex items-center gap-1">
+                          <FiUsers size={14} />
+                          {(gd.students?.length || 0)} students
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <FiCalendar size={14} />
+                          {gd.course}
+                        </span>
                       </div>
                       <Link 
                         to={`/gd/${gd.id}`}
                         className="flex items-center gap-1.5 bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-sm hover:shadow-md"
                       >
                         <FiPlay size={16} />
-                        Continue Evaluation
+                        Evaluate
                       </Link>
                     </div>
                   </div>
