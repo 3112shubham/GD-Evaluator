@@ -4,7 +4,7 @@ import tailwindcss from '@tailwindcss/vite';
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: '/gd/', // 👈 Critical for subfolder deployment
+  base: '/', // 👈 Critical for subfolder deployment
   plugins: [tailwindcss(), react()],
   define: {
     'process.env': {}
