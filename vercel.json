@@ -1,8 +1,14 @@
 {
+    "buildCommand": "npm run build",
+    "outputDirectory": "dist",
     "rewrites": [
       {
         "source": "/gd/(.*)",
-        "destination": "/index.html"
+        "destination": "/gd/index.html"
+      },
+      {
+        "source": "/gd",
+        "destination": "/gd/index.html"
       }
     ]
   }
