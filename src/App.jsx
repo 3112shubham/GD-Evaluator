@@ -46,7 +46,7 @@ function AppContent() {
 
 export default function App() {
   return (
-    <Router basename="/gd">
+    <Router>
       <UserProvider>
         <AppContent />
       </UserProvider>
