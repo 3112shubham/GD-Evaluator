@@ -2,9 +2,8 @@
     "rewrites": [
       {
         "source": "/gd/(.*)",
-        "destination": "/gd/index.html"
+        "destination": "/index.html"
       }
-    ],
-    "cleanUrls": true
+    ]
   }
   
