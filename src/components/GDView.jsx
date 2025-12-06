@@ -826,7 +826,7 @@ export default function GDView() {
                 <p className="text-blue-700 mb-4 text-sm">Students can scan this QR code to register for this GD session:</p>
                 <div className="flex justify-center bg-blue-50 p-4 rounded-lg mb-4 border border-blue-200">
                   <QRCode 
-                    value={`${window.location.origin}/gd/gd-volunteer/${gdId}`}
+                    value={`${window.location.origin}/gdtest/gd-volunteer/${gdId}`}
                     // value={`http://192.168.0.131:5177/gd/gd-volunteer/${gdId}`}
                     size={200}
                     level="H"
@@ -838,7 +838,7 @@ export default function GDView() {
                 </p>
                 <button
                   onClick={() => {
-                    const link = `${window.location.origin}/gd/gd-volunteer/${gdId}`;
+                    const link = `${window.location.origin}/gdtest/gd-volunteer/${gdId}`;
                     
                     // Try modern clipboard API first
                     if (navigator.clipboard && navigator.clipboard.writeText) {
