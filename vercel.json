@@ -3,7 +3,7 @@
     "outputDirectory": "dist",
     "rewrites": [
       {
-        "source": "/gdtest/(.*)",
+        "source": "/(.*)",
         "destination": "/index.html"
       }
     ]
