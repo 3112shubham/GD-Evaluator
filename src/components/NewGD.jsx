@@ -105,7 +105,7 @@ export default function NewGD() {
     try {
       const docRef = await addDoc(collection(db, 'sessions'), gdData);
       const linkId = docRef.id;
-      const link = `${window.location.origin}/gdtest/gd-volunteer/${linkId}`;
+      const link = `${window.location.origin}/gd/gd-volunteer/${linkId}`;
       // const link = `http://192.168.0.131:5177/gd/gd-volunteer/${linkId}`;
       setGeneratedLink(link);
       setGdId(linkId);
