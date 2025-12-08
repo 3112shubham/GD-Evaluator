@@ -203,7 +203,8 @@ export default function AdminEvaluations() {
     if (newItems.length > 0) {
       setDisplayedSessions([...displayedSessions, ...newItems]);
       setPage(nextPage);
-      setHasMore(newItems.length === ITEMS_PER_PAGE);
+      // Check if there are more items remaining after this batch
+      setHasMore(end < sessions.length);
     }
   };
 
